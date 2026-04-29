@@ -17,6 +17,8 @@ interface StockOutRecord {
   id: string;
   stock_out_number: string;
   delivery_date: string;
+  delivery_number?: string | null;
+  delivery_actual_date?: string | null;
   notes?: string | null;
   sales_order: {
     sales_order_number: string;
@@ -46,6 +48,9 @@ export function OutboundPdfPreview({ open, onOpenChange, record }: OutboundPdfPr
   const formatDate = (dateStr: string) => {
     return format(new Date(dateStr), 'dd MMM yyyy', { locale: localeId });
   };
+
+  const displayNo = record.delivery_number || record.stock_out_number;
+  const displayDate = record.delivery_actual_date || record.delivery_date;
 
   const handlePrint = async () => {
     if (!contentRef.current) return;
@@ -107,7 +112,7 @@ export function OutboundPdfPreview({ open, onOpenChange, record }: OutboundPdfPr
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
 
       pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, Math.min(pdfHeight, 297));
-      pdf.save(`${record.stock_out_number}-Delivery-Report.pdf`);
+      pdf.save(`${displayNo.replace(/\//g, '-')}-Delivery-Report.pdf`);
 
       // Cleanup
       document.body.removeChild(offscreenContainer);
@@ -154,12 +159,12 @@ export function OutboundPdfPreview({ open, onOpenChange, record }: OutboundPdfPr
           <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
             <div className="space-y-2">
               <div className="flex">
-                <span className="w-28 text-gray-600">Stock Out No</span>
-                <span className="font-semibold">: {record.stock_out_number}</span>
+                <span className="w-28 text-gray-600">No. DO</span>
+                <span className="font-semibold">: {displayNo}</span>
               </div>
               <div className="flex">
                 <span className="w-28 text-gray-600">Tanggal Kirim</span>
-                <span className="font-semibold">: {formatDate(record.delivery_date)}</span>
+                <span className="font-semibold">: {formatDate(displayDate)}</span>
               </div>
             </div>
             <div className="space-y-2">
