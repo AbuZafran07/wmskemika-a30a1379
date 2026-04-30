@@ -669,6 +669,14 @@ export default function SalesOrder() {
       toast.error(language === "en" ? "Please fill all required fields" : "Harap isi semua field wajib");
       return;
     }
+    if (!salesPulseReferenceNumber) {
+      toast.error(
+        language === "en"
+          ? "SalesPulse Reference No. is required"
+          : "No. Referensi SalesPulse wajib dipilih",
+      );
+      return;
+    }
     if (orderItems.length === 0) {
       toast.error(language === "en" ? "Please add at least one product" : "Tambahkan minimal satu produk");
       return;
@@ -1369,7 +1377,7 @@ export default function SalesOrder() {
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="space-y-2 md:col-span-2">
-                <Label>{language === "en" ? "SalesPulse Reference No." : "No. Referensi SalesPulse"}</Label>
+                <Label>{language === "en" ? "SalesPulse Reference No." : "No. Referensi SalesPulse"} *</Label>
                 <SearchableSelect
                   value={salesPulseReferenceNumber}
                   onValueChange={setSalesPulseReferenceNumber}
