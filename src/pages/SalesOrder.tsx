@@ -713,7 +713,7 @@ export default function SalesOrder() {
         order_date: orderDate,
         customer_id: customerId,
         customer_po_number: sanitizedCustomerPo,
-        sales_pulse_reference_number: salesPulseReferenceNumber || null,
+        sales_pulse_reference_number: salesPulseReferenceNumber,
         sales_name: salesName,
         allocation_type: allocationType,
         project_instansi: projectInstansi,
