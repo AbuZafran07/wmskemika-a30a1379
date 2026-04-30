@@ -672,8 +672,15 @@ export default function SalesOrder() {
     if (!salesPulseReferenceNumber) {
       toast.error(
         language === "en"
-          ? "SalesPulse Reference No. is required"
-          : "No. Referensi SalesPulse wajib dipilih",
+          ? "SalesPulse Reference is required"
+          : "Referensi SalesPulse wajib dipilih",
+        {
+          description:
+            language === "en"
+              ? "Please select a SalesPulse Reference No. on the form before saving the Sales Order."
+              : "Silakan pilih No. Referensi SalesPulse pada form terlebih dahulu sebelum menyimpan Sales Order.",
+          duration: 6000,
+        },
       );
       return;
     }
