@@ -379,6 +379,19 @@ export default function OutboundReport() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="sm:w-56">
+                <Select value={bookingStatusFilter} onValueChange={setBookingStatusFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'en' ? 'All Booking Status' : 'Semua Status Booking'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">{language === 'en' ? 'All Booking Status' : 'Semua Status Booking'}</SelectItem>
+                    <SelectItem value="booked">📦 Booked (Reserved)</SelectItem>
+                    <SelectItem value="delivered">✅ Delivered</SelectItem>
+                    <SelectItem value="released">❌ Released</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="gap-2">
