@@ -321,6 +321,7 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
   const [deleteAction, setDeleteAction] = useState<"remove_from_board" | "delivered" | "archived">("remove_from_board");
   const [deliveredDate, setDeliveredDate] = useState(new Date().toISOString().split("T")[0]);
   const [deletingCard, setDeletingCard] = useState(false);
+  const [releaseReason, setReleaseReason] = useState("");
 
   const isSuperAdmin = user?.role === 'super_admin';
   const isFinance = user?.role === 'finance';
@@ -1243,8 +1244,48 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
   // Delete card handler with options
   const handleDeleteCard = async () => {
     if (!user || !card || !canDeleteCard) return;
+
+    // For remove_from_board / archived: release any active stock_out bookings (require reason)
+    const needsReleaseFlow = deleteAction === "remove_from_board" || deleteAction === "archived";
+    let bookedStockOuts: Array<{ id: string; stock_out_number: string }> = [];
+    if (needsReleaseFlow) {
+      const { data: booked, error: fetchErr } = await supabase
+        .from("stock_out_headers")
+        .select("id, stock_out_number")
+        .eq("sales_order_id", card.sales_order_id)
+        .eq("booking_status", "booked");
+      if (fetchErr) {
+        toast.error("Gagal cek booking stok: " + fetchErr.message);
+        return;
+      }
+      bookedStockOuts = booked || [];
+      if (bookedStockOuts.length > 0) {
+        const reason = releaseReason.trim();
+        if (reason.length < 20) {
+          toast.error("Alasan release booking minimal 20 karakter (ada " + bookedStockOuts.length + " stock out booked).");
+          return;
+        }
+      }
+    }
+
     setDeletingCard(true);
     try {
+      // Release bookings first; abort all if any fails
+      if (needsReleaseFlow && bookedStockOuts.length > 0) {
+        const reason = releaseReason.trim();
+        for (const so of bookedStockOuts) {
+          const { error: relErr } = await supabase.rpc("stock_out_release_booking", {
+            p_stock_out_id: so.id,
+            p_reason: reason,
+          });
+          if (relErr) {
+            toast.error(`Gagal release booking ${so.stock_out_number}: ${relErr.message}`);
+            setDeletingCard(false);
+            return;
+          }
+        }
+      }
+
       if (deleteAction === "delivered") {
         // Move to delivered with date note
         const { error: updateError } = await supabase
@@ -2594,7 +2635,7 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
       </DialogContent>
 
       {/* Delete Card Dialog */}
-      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+      <Dialog open={showDeleteDialog} onOpenChange={(open) => { setShowDeleteDialog(open); if (!open) setReleaseReason(""); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -2661,6 +2702,22 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
                 </div>
               </label>
             </div>
+            {(deleteAction === "remove_from_board" || deleteAction === "archived") && (
+              <div className="space-y-1.5 pt-2 border-t">
+                <label className="text-xs font-medium">
+                  Alasan release booking stok <span className="text-destructive">*</span>
+                  <span className="text-muted-foreground font-normal"> (min 20 karakter, wajib jika ada stock out booked)</span>
+                </label>
+                <Textarea
+                  value={releaseReason}
+                  onChange={(e) => setReleaseReason(e.target.value)}
+                  placeholder="Mis: Customer cancel order karena perubahan jadwal pengiriman..."
+                  className="text-xs min-h-[70px]"
+                  maxLength={500}
+                />
+                <p className="text-[10px] text-muted-foreground text-right">{releaseReason.length}/500</p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setShowDeleteDialog(false)}>Batal</Button>

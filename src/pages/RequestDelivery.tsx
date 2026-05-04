@@ -592,6 +592,27 @@ export default function RequestDelivery() {
     }
 
     try {
+      // === BOOKING → DELIVERY: Confirm stock deduction when moving from approval_delivery to pengiriman_* ===
+      if (cardToMove.board_status === "approval_delivery" && PENGIRIMAN_COLUMNS.includes(newStatus)) {
+        const { data: bookedSOs, error: fetchErr } = await supabase
+          .from("stock_out_headers")
+          .select("id, stock_out_number")
+          .eq("sales_order_id", cardToMove.sales_order_id)
+          .eq("booking_status", "booked");
+
+        if (fetchErr) throw fetchErr;
+
+        for (const so of bookedSOs || []) {
+          const { error: confirmErr } = await supabase.rpc("stock_out_confirm_delivery", {
+            p_stock_out_id: so.id,
+          });
+          if (confirmErr) {
+            toast.error(`Gagal konfirmasi pengiriman untuk ${so.stock_out_number}: ${confirmErr.message}`);
+            return; // abort move; nothing has been changed yet
+          }
+        }
+      }
+
       const { error } = await supabase
         .from("delivery_requests")
         .update({ 
