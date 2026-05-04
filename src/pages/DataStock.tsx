@@ -367,6 +367,8 @@ export default function DataStock() {
                 <TableHead>{language === 'en' ? 'Category' : 'Kategori'}</TableHead>
                 <TableHead>{language === 'en' ? 'Unit' : 'Satuan'}</TableHead>
                 <TableHead className="text-center">{language === 'en' ? 'Total Stock' : 'Total Stok'}</TableHead>
+                <TableHead className="text-center">{language === 'en' ? 'Booked' : 'Booked'}</TableHead>
+                <TableHead className="text-center">{language === 'en' ? 'Available' : 'Tersedia'}</TableHead>
                 <TableHead className="text-center">{language === 'en' ? 'Min Stock' : 'Stok Min'}</TableHead>
                 <TableHead className="text-center">{language === 'en' ? 'Batches' : 'Batch'}</TableHead>
                 <TableHead className="text-center">Status</TableHead>
@@ -375,7 +377,7 @@ export default function DataStock() {
             <TableBody>
               {paginatedData.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
                     {language === 'en' ? 'No stock data found' : 'Tidak ada data stok'}
                   </TableCell>
                 </TableRow>
@@ -409,6 +411,22 @@ export default function DataStock() {
                         <TableCell>{item.category}</TableCell>
                         <TableCell>{item.unit}</TableCell>
                         <TableCell className="text-center font-medium">{item.totalStock}</TableCell>
+                        <TableCell className="text-center">
+                          {item.totalBooked > 0 ? (
+                            <Badge variant="warning" className="font-mono">{item.totalBooked}</Badge>
+                          ) : (
+                            <span className="text-muted-foreground">0</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className={cn(
+                            "font-semibold",
+                            item.totalAvailable === 0 && "text-destructive",
+                            item.totalAvailable > 0 && item.totalAvailable <= item.min_stock && "text-warning"
+                          )}>
+                            {item.totalAvailable}
+                          </span>
+                        </TableCell>
                         <TableCell className="text-center">{item.min_stock}</TableCell>
                         <TableCell className="text-center">{item.batches.length}</TableCell>
                         <TableCell className="text-center">
@@ -424,7 +442,7 @@ export default function DataStock() {
                       
                       {isExpanded && item.batches.length > 0 && (
                         <TableRow>
-                          <TableCell colSpan={9} className="bg-muted/30 p-0">
+                          <TableCell colSpan={11} className="bg-muted/30 p-0">
                             <div className="p-4">
                               <h4 className="text-sm font-medium mb-3">
                                 {language === 'en' ? 'Batch Details (FEFO Order)' : 'Detail Batch (Urutan FEFO)'}
@@ -435,7 +453,9 @@ export default function DataStock() {
                                     <TableRow>
                                       <TableHead>{language === 'en' ? 'Batch No' : 'No. Batch'}</TableHead>
                                       <TableHead>{language === 'en' ? 'Expired Date' : 'Tgl. Kadaluarsa'}</TableHead>
-                                      <TableHead className="text-right">{language === 'en' ? 'Quantity' : 'Kuantitas'}</TableHead>
+                                      <TableHead className="text-right">{language === 'en' ? 'On Hand' : 'Stok Fisik'}</TableHead>
+                                      <TableHead className="text-right">{language === 'en' ? 'Booked' : 'Booked'}</TableHead>
+                                      <TableHead className="text-right">{language === 'en' ? 'Available' : 'Tersedia'}</TableHead>
                                       <TableHead className="text-center">Status</TableHead>
                                     </TableRow>
                                   </TableHeader>
@@ -468,6 +488,21 @@ export default function DataStock() {
                                               </div>
                                             </TableCell>
                                             <TableCell className="text-right">{batch.qty_on_hand} {item.unit}</TableCell>
+                                            <TableCell className="text-right">
+                                              {batch.qty_booked > 0 ? (
+                                                <Badge variant="warning" className="font-mono text-[10px]">
+                                                  {batch.qty_booked}
+                                                </Badge>
+                                              ) : (
+                                                <span className="text-muted-foreground">0</span>
+                                              )}
+                                            </TableCell>
+                                            <TableCell className={cn(
+                                              "text-right font-semibold",
+                                              batch.qty_available === 0 && "text-destructive"
+                                            )}>
+                                              {batch.qty_available} {item.unit}
+                                            </TableCell>
                                             <TableCell className="text-center">
                                               {expired ? (
                                                 <Badge variant="destructive">{language === 'en' ? 'Expired' : 'Kadaluarsa'}</Badge>
@@ -488,7 +523,7 @@ export default function DataStock() {
 
                       {isExpanded && item.batches.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={9} className="bg-muted/30 p-4 text-center text-muted-foreground">
+                          <TableCell colSpan={11} className="bg-muted/30 p-4 text-center text-muted-foreground">
                             {language === 'en' ? 'No batches available' : 'Tidak ada batch tersedia'}
                           </TableCell>
                         </TableRow>
