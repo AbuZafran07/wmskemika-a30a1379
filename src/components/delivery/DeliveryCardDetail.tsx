@@ -1244,8 +1244,48 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
   // Delete card handler with options
   const handleDeleteCard = async () => {
     if (!user || !card || !canDeleteCard) return;
+
+    // For remove_from_board / archived: release any active stock_out bookings (require reason)
+    const needsReleaseFlow = deleteAction === "remove_from_board" || deleteAction === "archived";
+    let bookedStockOuts: Array<{ id: string; stock_out_number: string }> = [];
+    if (needsReleaseFlow) {
+      const { data: booked, error: fetchErr } = await supabase
+        .from("stock_out_headers")
+        .select("id, stock_out_number")
+        .eq("sales_order_id", card.sales_order_id)
+        .eq("booking_status", "booked");
+      if (fetchErr) {
+        toast.error("Gagal cek booking stok: " + fetchErr.message);
+        return;
+      }
+      bookedStockOuts = booked || [];
+      if (bookedStockOuts.length > 0) {
+        const reason = releaseReason.trim();
+        if (reason.length < 20) {
+          toast.error("Alasan release booking minimal 20 karakter (ada " + bookedStockOuts.length + " stock out booked).");
+          return;
+        }
+      }
+    }
+
     setDeletingCard(true);
     try {
+      // Release bookings first; abort all if any fails
+      if (needsReleaseFlow && bookedStockOuts.length > 0) {
+        const reason = releaseReason.trim();
+        for (const so of bookedStockOuts) {
+          const { error: relErr } = await supabase.rpc("stock_out_release_booking", {
+            p_stock_out_id: so.id,
+            p_reason: reason,
+          });
+          if (relErr) {
+            toast.error(`Gagal release booking ${so.stock_out_number}: ${relErr.message}`);
+            setDeletingCard(false);
+            return;
+          }
+        }
+      }
+
       if (deleteAction === "delivered") {
         // Move to delivered with date note
         const { error: updateError } = await supabase
