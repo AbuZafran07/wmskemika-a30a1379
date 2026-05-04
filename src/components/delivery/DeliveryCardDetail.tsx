@@ -2702,6 +2702,22 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
                 </div>
               </label>
             </div>
+            {(deleteAction === "remove_from_board" || deleteAction === "archived") && (
+              <div className="space-y-1.5 pt-2 border-t">
+                <label className="text-xs font-medium">
+                  Alasan release booking stok <span className="text-destructive">*</span>
+                  <span className="text-muted-foreground font-normal"> (min 20 karakter, wajib jika ada stock out booked)</span>
+                </label>
+                <Textarea
+                  value={releaseReason}
+                  onChange={(e) => setReleaseReason(e.target.value)}
+                  placeholder="Mis: Customer cancel order karena perubahan jadwal pengiriman..."
+                  className="text-xs min-h-[70px]"
+                  maxLength={500}
+                />
+                <p className="text-[10px] text-muted-foreground text-right">{releaseReason.length}/500</p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setShowDeleteDialog(false)}>Batal</Button>
