@@ -448,13 +448,14 @@ export default function OutboundReport() {
                   <TableHead className="text-center">{language === 'en' ? 'Qty' : 'Qty'}</TableHead>
                   <TableHead>{language === 'en' ? 'Batch No' : 'No. Batch'}</TableHead>
                   <TableHead>{language === 'en' ? 'Expiry' : 'Kadaluarsa'}</TableHead>
+                  <TableHead className="text-center">{language === 'en' ? 'Booking' : 'Status'}</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {paginatedRecords.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                       {language === 'en' ? 'No outbound records found' : 'Tidak ada data pengiriman'}
                     </TableCell>
                   </TableRow>
@@ -515,6 +516,45 @@ export default function OutboundReport() {
                         <TableCell>{item.batch?.batch_no || '-'}</TableCell>
                         <TableCell>{item.batch?.expired_date ? formatDate(item.batch.expired_date) : '-'}</TableCell>
                         {idx === 0 ? (
+                          <TableCell rowSpan={record.items.length} className="text-center align-top">
+                            {(() => {
+                              const status = record.booking_status || 'delivered';
+                              if (status === 'booked') {
+                                return (
+                                  <Badge variant="warning" className="gap-1">
+                                    <Clock className="w-3 h-3" />
+                                    Booked
+                                  </Badge>
+                                );
+                              }
+                              if (status === 'released') {
+                                return (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Badge variant="secondary" className="gap-1 cursor-help">
+                                          <XCircle className="w-3 h-3" />
+                                          Released
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      {record.released_reason && (
+                                        <TooltipContent side="left" className="text-xs max-w-xs">
+                                          <p className="font-semibold mb-1">Alasan Release:</p>
+                                          <p>{record.released_reason}</p>
+                                        </TooltipContent>
+                                      )}
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                );
+                              }
+                              return (
+                                <Badge variant="success" className="gap-1">
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  Delivered
+                                </Badge>
+                              );
+                            })()}
+                          </TableCell>
                           <TableCell rowSpan={record.items.length} className="text-right align-top">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
