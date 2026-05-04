@@ -57,7 +57,7 @@ interface StockOutRecord {
   booking_status?: string | null;
   delivered_at?: string | null;
   released_at?: string | null;
-  release_reason?: string | null;
+  released_reason?: string | null;
   sales_order: {
     sales_order_number: string;
     customer: { name: string } | null;
@@ -98,7 +98,7 @@ export default function OutboundReport() {
       .from('stock_out_headers')
       .select(`
         id, stock_out_number, delivery_date, delivery_number, delivery_actual_date, notes,
-        booking_status, delivered_at, released_at, release_reason,
+        booking_status, delivered_at, released_at, released_reason,
         sales_order:sales_order_headers(
           sales_order_number,
           customer:customers(name)
