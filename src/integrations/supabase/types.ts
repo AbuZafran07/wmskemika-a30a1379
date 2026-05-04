@@ -2049,8 +2049,16 @@ export type Database = {
         Args: { header_data: Json; items_data: Json }
         Returns: Json
       }
+      stock_out_confirm_delivery: {
+        Args: { p_stock_out_id: string }
+        Returns: Json
+      }
       stock_out_create: {
         Args: { header_data: Json; items_data: Json }
+        Returns: Json
+      }
+      stock_out_release_booking: {
+        Args: { p_reason: string; p_stock_out_id: string }
         Returns: Json
       }
       validate_adjustment_quantity: { Args: { qty: number }; Returns: boolean }
