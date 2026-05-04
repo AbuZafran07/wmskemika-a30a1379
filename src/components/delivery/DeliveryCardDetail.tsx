@@ -2635,7 +2635,7 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
       </DialogContent>
 
       {/* Delete Card Dialog */}
-      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+      <Dialog open={showDeleteDialog} onOpenChange={(open) => { setShowDeleteDialog(open); if (!open) setReleaseReason(""); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
