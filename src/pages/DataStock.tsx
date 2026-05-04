@@ -31,6 +31,8 @@ interface Batch {
   batch_no: string;
   expired_date: string | null;
   qty_on_hand: number;
+  qty_booked: number;
+  qty_available: number;
 }
 
 interface StockItem {
@@ -42,6 +44,8 @@ interface StockItem {
   min_stock: number;
   max_stock: number;
   totalStock: number;
+  totalBooked: number;
+  totalAvailable: number;
   batches: Batch[];
 }
 
@@ -91,10 +95,38 @@ export default function DataStock() {
 
       if (batchError) throw batchError;
 
+      // Fetch booking info per batch from available_stock view
+      const { data: availData, error: availError } = await supabase
+        .from('available_stock' as any)
+        .select('batch_id, qty_booked, qty_available');
+
+      if (availError) console.warn('available_stock fetch warning:', availError);
+
+      const bookingMap = new Map<string, { qty_booked: number; qty_available: number }>();
+      (availData || []).forEach((a: any) => {
+        bookingMap.set(a.batch_id, {
+          qty_booked: a.qty_booked || 0,
+          qty_available: a.qty_available || 0,
+        });
+      });
+
       // Map batches to products
       const stockItems: StockItem[] = (products || []).map((product: any) => {
         const productBatches = (batches || []).filter((b: any) => b.product_id === product.id);
         const totalStock = productBatches.reduce((sum: number, b: any) => sum + (b.qty_on_hand || 0), 0);
+        const enrichedBatches = productBatches.map((b: any) => {
+          const bk = bookingMap.get(b.id) || { qty_booked: 0, qty_available: b.qty_on_hand };
+          return {
+            id: b.id,
+            batch_no: b.batch_no,
+            expired_date: b.expired_date,
+            qty_on_hand: b.qty_on_hand,
+            qty_booked: bk.qty_booked,
+            qty_available: bk.qty_available,
+          };
+        });
+        const totalBooked = enrichedBatches.reduce((s, b) => s + b.qty_booked, 0);
+        const totalAvailable = enrichedBatches.reduce((s, b) => s + b.qty_available, 0);
 
         return {
           id: product.id,
@@ -105,12 +137,9 @@ export default function DataStock() {
           min_stock: product.min_stock || 0,
           max_stock: product.max_stock || 0,
           totalStock,
-          batches: productBatches.map((b: any) => ({
-            id: b.id,
-            batch_no: b.batch_no,
-            expired_date: b.expired_date,
-            qty_on_hand: b.qty_on_hand,
-          })),
+          totalBooked,
+          totalAvailable,
+          batches: enrichedBatches,
         };
       });
 
@@ -188,13 +217,15 @@ export default function DataStock() {
   const totalBatches = stockData.reduce((acc, s) => acc + s.batches.length, 0);
 
   const exportCSV = () => {
-    const headers = ['SKU', 'Product Name', 'Category', 'Unit', 'Total Stock', 'Min Stock', 'Max Stock', 'Status'];
+    const headers = ['SKU', 'Product Name', 'Category', 'Unit', 'Total Stock', 'Booked', 'Available', 'Min Stock', 'Max Stock', 'Status'];
     const rows = filteredStock.map(item => [
       item.sku || '-',
       item.name,
       item.category,
       item.unit,
       item.totalStock,
+      item.totalBooked,
+      item.totalAvailable,
       item.min_stock,
       item.max_stock,
       isOutOfStock(item.totalStock) ? 'Out of Stock' : isLowStock(item.totalStock, item.min_stock) ? 'Low Stock' : 'Available'
