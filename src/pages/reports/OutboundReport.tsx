@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, Download, CalendarIcon, ArrowUpFromLine, Loader2, MoreHorizontal, Eye, Printer, Info, FileText, FileSpreadsheet } from 'lucide-react';
+import { Search, Download, CalendarIcon, ArrowUpFromLine, Loader2, MoreHorizontal, Eye, Printer, Info, FileText, FileSpreadsheet, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -54,6 +54,10 @@ interface StockOutRecord {
   delivery_number: string | null;
   delivery_actual_date: string | null;
   notes?: string | null;
+  booking_status?: string | null;
+  delivered_at?: string | null;
+  released_at?: string | null;
+  release_reason?: string | null;
   sales_order: {
     sales_order_number: string;
     customer: { name: string } | null;
@@ -76,6 +80,7 @@ export default function OutboundReport() {
   const [dateTo, setDateTo] = useState('');
   const [productFilter, setProductFilter] = useState('');
   const [customerFilter, setCustomerFilter] = useState('__all__');
+  const [bookingStatusFilter, setBookingStatusFilter] = useState('__all__');
 
   // Modal states
   const [selectedOutbound, setSelectedOutbound] = useState<StockOutRecord | null>(null);
@@ -93,6 +98,7 @@ export default function OutboundReport() {
       .from('stock_out_headers')
       .select(`
         id, stock_out_number, delivery_date, delivery_number, delivery_actual_date, notes,
+        booking_status, delivered_at, released_at, release_reason,
         sales_order:sales_order_headers(
           sales_order_number,
           customer:customers(name)
@@ -140,12 +146,16 @@ export default function OutboundReport() {
     const matchesCustomer = customerFilter === '__all__' || 
       record.sales_order?.customer?.name === customerFilter;
 
+    // Booking status filter
+    const matchesBookingStatus = bookingStatusFilter === '__all__' ||
+      (record.booking_status || 'delivered') === bookingStatusFilter;
+
     const displayDate = record.delivery_actual_date || record.delivery_date;
     const recordDate = new Date(displayDate);
     const matchesDateFrom = !dateFrom || recordDate >= new Date(dateFrom);
     const matchesDateTo = !dateTo || recordDate <= new Date(dateTo);
     
-    return matchesSearch && matchesProduct && matchesCustomer && matchesDateFrom && matchesDateTo;
+    return matchesSearch && matchesProduct && matchesCustomer && matchesBookingStatus && matchesDateFrom && matchesDateTo;
   });
 
   // Pagination
@@ -171,11 +181,12 @@ export default function OutboundReport() {
     setDateTo('');
     setProductFilter('');
     setCustomerFilter('__all__');
+    setBookingStatusFilter('__all__');
     setSearchQuery('');
   };
 
-  const hasActiveFilters = dateFrom || dateTo || productFilter || customerFilter !== '__all__';
-  const activeFilterCount = [dateFrom || dateTo, productFilter, customerFilter !== '__all__'].filter(Boolean).length;
+  const hasActiveFilters = dateFrom || dateTo || productFilter || customerFilter !== '__all__' || bookingStatusFilter !== '__all__';
+  const activeFilterCount = [dateFrom || dateTo, productFilter, customerFilter !== '__all__', bookingStatusFilter !== '__all__'].filter(Boolean).length;
 
   const totalQtyOut = filteredRecords.reduce(
     (sum, r) => sum + r.items.reduce((s, i) => s + i.qty_out, 0),
