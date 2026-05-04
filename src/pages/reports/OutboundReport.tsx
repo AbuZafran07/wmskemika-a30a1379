@@ -516,6 +516,7 @@ export default function OutboundReport() {
                         <TableCell>{item.batch?.batch_no || '-'}</TableCell>
                         <TableCell>{item.batch?.expired_date ? formatDate(item.batch.expired_date) : '-'}</TableCell>
                         {idx === 0 ? (
+                          <>
                           <TableCell rowSpan={record.items.length} className="text-center align-top">
                             {(() => {
                               const status = record.booking_status || 'delivered';
@@ -574,6 +575,7 @@ export default function OutboundReport() {
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </TableCell>
+                          </>
                         ) : null}
                       </TableRow>
                     ))
