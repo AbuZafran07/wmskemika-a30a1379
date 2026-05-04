@@ -1360,6 +1360,13 @@ export type Database = {
             foreignKeyName: "stock_adjustment_items_batch_id_fkey"
             columns: ["batch_id"]
             isOneToOne: false
+            referencedRelation: "available_stock"
+            referencedColumns: ["batch_id"]
+          },
+          {
+            foreignKeyName: "stock_adjustment_items_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
             referencedRelation: "inventory_batches"
             referencedColumns: ["id"]
           },
@@ -1524,39 +1531,54 @@ export type Database = {
       }
       stock_out_headers: {
         Row: {
+          booking_status: string
           created_at: string | null
           created_by: string | null
+          delivered_at: string | null
           delivery_actual_date: string | null
           delivery_date: string
           delivery_note_url: string | null
           delivery_number: string | null
           id: string
           notes: string | null
+          released_at: string | null
+          released_reason: string | null
           sales_order_id: string
+          skip_stock_deduction: boolean
           stock_out_number: string
         }
         Insert: {
+          booking_status?: string
           created_at?: string | null
           created_by?: string | null
+          delivered_at?: string | null
           delivery_actual_date?: string | null
           delivery_date?: string
           delivery_note_url?: string | null
           delivery_number?: string | null
           id?: string
           notes?: string | null
+          released_at?: string | null
+          released_reason?: string | null
           sales_order_id: string
+          skip_stock_deduction?: boolean
           stock_out_number: string
         }
         Update: {
+          booking_status?: string
           created_at?: string | null
           created_by?: string | null
+          delivered_at?: string | null
           delivery_actual_date?: string | null
           delivery_date?: string
           delivery_note_url?: string | null
           delivery_number?: string | null
           id?: string
           notes?: string | null
+          released_at?: string | null
+          released_reason?: string | null
           sales_order_id?: string
+          skip_stock_deduction?: boolean
           stock_out_number?: string
         }
         Relationships: [
@@ -1598,6 +1620,13 @@ export type Database = {
           stock_out_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "stock_out_items_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "available_stock"
+            referencedColumns: ["batch_id"]
+          },
           {
             foreignKeyName: "stock_out_items_batch_id_fkey"
             columns: ["batch_id"]
@@ -1669,6 +1698,13 @@ export type Database = {
           transaction_type?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "stock_transactions_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "available_stock"
+            referencedColumns: ["batch_id"]
+          },
           {
             foreignKeyName: "stock_transactions_batch_id_fkey"
             columns: ["batch_id"]
@@ -1825,6 +1861,44 @@ export type Database = {
       }
     }
     Views: {
+      available_stock: {
+        Row: {
+          batch_id: string | null
+          batch_no: string | null
+          expired_date: string | null
+          product_id: string | null
+          qty_available: number | null
+          qty_booked: number | null
+          qty_on_hand: number | null
+        }
+        Insert: {
+          batch_id?: string | null
+          batch_no?: string | null
+          expired_date?: string | null
+          product_id?: string | null
+          qty_available?: never
+          qty_booked?: never
+          qty_on_hand?: number | null
+        }
+        Update: {
+          batch_id?: string | null
+          batch_no?: string | null
+          expired_date?: string | null
+          product_id?: string | null
+          qty_available?: never
+          qty_booked?: never
+          qty_on_hand?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_batches_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles_chat_view: {
         Row: {
           avatar_url: string | null
