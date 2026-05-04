@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, Download, CalendarIcon, ArrowUpFromLine, Loader2, MoreHorizontal, Eye, Printer, Info, FileText, FileSpreadsheet } from 'lucide-react';
+import { Search, Download, CalendarIcon, ArrowUpFromLine, Loader2, MoreHorizontal, Eye, Printer, Info, FileText, FileSpreadsheet, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -54,6 +54,10 @@ interface StockOutRecord {
   delivery_number: string | null;
   delivery_actual_date: string | null;
   notes?: string | null;
+  booking_status?: string | null;
+  delivered_at?: string | null;
+  released_at?: string | null;
+  released_reason?: string | null;
   sales_order: {
     sales_order_number: string;
     customer: { name: string } | null;
@@ -76,6 +80,7 @@ export default function OutboundReport() {
   const [dateTo, setDateTo] = useState('');
   const [productFilter, setProductFilter] = useState('');
   const [customerFilter, setCustomerFilter] = useState('__all__');
+  const [bookingStatusFilter, setBookingStatusFilter] = useState('__all__');
 
   // Modal states
   const [selectedOutbound, setSelectedOutbound] = useState<StockOutRecord | null>(null);
@@ -93,6 +98,7 @@ export default function OutboundReport() {
       .from('stock_out_headers')
       .select(`
         id, stock_out_number, delivery_date, delivery_number, delivery_actual_date, notes,
+        booking_status, delivered_at, released_at, released_reason,
         sales_order:sales_order_headers(
           sales_order_number,
           customer:customers(name)
@@ -140,12 +146,16 @@ export default function OutboundReport() {
     const matchesCustomer = customerFilter === '__all__' || 
       record.sales_order?.customer?.name === customerFilter;
 
+    // Booking status filter
+    const matchesBookingStatus = bookingStatusFilter === '__all__' ||
+      (record.booking_status || 'delivered') === bookingStatusFilter;
+
     const displayDate = record.delivery_actual_date || record.delivery_date;
     const recordDate = new Date(displayDate);
     const matchesDateFrom = !dateFrom || recordDate >= new Date(dateFrom);
     const matchesDateTo = !dateTo || recordDate <= new Date(dateTo);
     
-    return matchesSearch && matchesProduct && matchesCustomer && matchesDateFrom && matchesDateTo;
+    return matchesSearch && matchesProduct && matchesCustomer && matchesBookingStatus && matchesDateFrom && matchesDateTo;
   });
 
   // Pagination
@@ -171,11 +181,12 @@ export default function OutboundReport() {
     setDateTo('');
     setProductFilter('');
     setCustomerFilter('__all__');
+    setBookingStatusFilter('__all__');
     setSearchQuery('');
   };
 
-  const hasActiveFilters = dateFrom || dateTo || productFilter || customerFilter !== '__all__';
-  const activeFilterCount = [dateFrom || dateTo, productFilter, customerFilter !== '__all__'].filter(Boolean).length;
+  const hasActiveFilters = dateFrom || dateTo || productFilter || customerFilter !== '__all__' || bookingStatusFilter !== '__all__';
+  const activeFilterCount = [dateFrom || dateTo, productFilter, customerFilter !== '__all__', bookingStatusFilter !== '__all__'].filter(Boolean).length;
 
   const totalQtyOut = filteredRecords.reduce(
     (sum, r) => sum + r.items.reduce((s, i) => s + i.qty_out, 0),
@@ -368,6 +379,19 @@ export default function OutboundReport() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="sm:w-56">
+                <Select value={bookingStatusFilter} onValueChange={setBookingStatusFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'en' ? 'All Booking Status' : 'Semua Status Booking'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">{language === 'en' ? 'All Booking Status' : 'Semua Status Booking'}</SelectItem>
+                    <SelectItem value="booked">📦 Booked (Reserved)</SelectItem>
+                    <SelectItem value="delivered">✅ Delivered</SelectItem>
+                    <SelectItem value="released">❌ Released</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="gap-2">
@@ -424,13 +448,14 @@ export default function OutboundReport() {
                   <TableHead className="text-center">{language === 'en' ? 'Qty' : 'Qty'}</TableHead>
                   <TableHead>{language === 'en' ? 'Batch No' : 'No. Batch'}</TableHead>
                   <TableHead>{language === 'en' ? 'Expiry' : 'Kadaluarsa'}</TableHead>
+                  <TableHead className="text-center">{language === 'en' ? 'Booking' : 'Status'}</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {paginatedRecords.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                       {language === 'en' ? 'No outbound records found' : 'Tidak ada data pengiriman'}
                     </TableCell>
                   </TableRow>
@@ -491,6 +516,46 @@ export default function OutboundReport() {
                         <TableCell>{item.batch?.batch_no || '-'}</TableCell>
                         <TableCell>{item.batch?.expired_date ? formatDate(item.batch.expired_date) : '-'}</TableCell>
                         {idx === 0 ? (
+                          <>
+                          <TableCell rowSpan={record.items.length} className="text-center align-top">
+                            {(() => {
+                              const status = record.booking_status || 'delivered';
+                              if (status === 'booked') {
+                                return (
+                                  <Badge variant="warning" className="gap-1">
+                                    <Clock className="w-3 h-3" />
+                                    Booked
+                                  </Badge>
+                                );
+                              }
+                              if (status === 'released') {
+                                return (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Badge variant="secondary" className="gap-1 cursor-help">
+                                          <XCircle className="w-3 h-3" />
+                                          Released
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      {record.released_reason && (
+                                        <TooltipContent side="left" className="text-xs max-w-xs">
+                                          <p className="font-semibold mb-1">Alasan Release:</p>
+                                          <p>{record.released_reason}</p>
+                                        </TooltipContent>
+                                      )}
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                );
+                              }
+                              return (
+                                <Badge variant="success" className="gap-1">
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  Delivered
+                                </Badge>
+                              );
+                            })()}
+                          </TableCell>
                           <TableCell rowSpan={record.items.length} className="text-right align-top">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -510,6 +575,7 @@ export default function OutboundReport() {
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </TableCell>
+                          </>
                         ) : null}
                       </TableRow>
                     ))

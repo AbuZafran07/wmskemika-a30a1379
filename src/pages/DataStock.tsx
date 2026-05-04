@@ -31,6 +31,8 @@ interface Batch {
   batch_no: string;
   expired_date: string | null;
   qty_on_hand: number;
+  qty_booked: number;
+  qty_available: number;
 }
 
 interface StockItem {
@@ -42,6 +44,8 @@ interface StockItem {
   min_stock: number;
   max_stock: number;
   totalStock: number;
+  totalBooked: number;
+  totalAvailable: number;
   batches: Batch[];
 }
 
@@ -91,10 +95,38 @@ export default function DataStock() {
 
       if (batchError) throw batchError;
 
+      // Fetch booking info per batch from available_stock view
+      const { data: availData, error: availError } = await supabase
+        .from('available_stock' as any)
+        .select('batch_id, qty_booked, qty_available');
+
+      if (availError) console.warn('available_stock fetch warning:', availError);
+
+      const bookingMap = new Map<string, { qty_booked: number; qty_available: number }>();
+      (availData || []).forEach((a: any) => {
+        bookingMap.set(a.batch_id, {
+          qty_booked: a.qty_booked || 0,
+          qty_available: a.qty_available || 0,
+        });
+      });
+
       // Map batches to products
       const stockItems: StockItem[] = (products || []).map((product: any) => {
         const productBatches = (batches || []).filter((b: any) => b.product_id === product.id);
         const totalStock = productBatches.reduce((sum: number, b: any) => sum + (b.qty_on_hand || 0), 0);
+        const enrichedBatches = productBatches.map((b: any) => {
+          const bk = bookingMap.get(b.id) || { qty_booked: 0, qty_available: b.qty_on_hand };
+          return {
+            id: b.id,
+            batch_no: b.batch_no,
+            expired_date: b.expired_date,
+            qty_on_hand: b.qty_on_hand,
+            qty_booked: bk.qty_booked,
+            qty_available: bk.qty_available,
+          };
+        });
+        const totalBooked = enrichedBatches.reduce((s, b) => s + b.qty_booked, 0);
+        const totalAvailable = enrichedBatches.reduce((s, b) => s + b.qty_available, 0);
 
         return {
           id: product.id,
@@ -105,12 +137,9 @@ export default function DataStock() {
           min_stock: product.min_stock || 0,
           max_stock: product.max_stock || 0,
           totalStock,
-          batches: productBatches.map((b: any) => ({
-            id: b.id,
-            batch_no: b.batch_no,
-            expired_date: b.expired_date,
-            qty_on_hand: b.qty_on_hand,
-          })),
+          totalBooked,
+          totalAvailable,
+          batches: enrichedBatches,
         };
       });
 
@@ -188,13 +217,15 @@ export default function DataStock() {
   const totalBatches = stockData.reduce((acc, s) => acc + s.batches.length, 0);
 
   const exportCSV = () => {
-    const headers = ['SKU', 'Product Name', 'Category', 'Unit', 'Total Stock', 'Min Stock', 'Max Stock', 'Status'];
+    const headers = ['SKU', 'Product Name', 'Category', 'Unit', 'Total Stock', 'Booked', 'Available', 'Min Stock', 'Max Stock', 'Status'];
     const rows = filteredStock.map(item => [
       item.sku || '-',
       item.name,
       item.category,
       item.unit,
       item.totalStock,
+      item.totalBooked,
+      item.totalAvailable,
       item.min_stock,
       item.max_stock,
       isOutOfStock(item.totalStock) ? 'Out of Stock' : isLowStock(item.totalStock, item.min_stock) ? 'Low Stock' : 'Available'
@@ -336,6 +367,8 @@ export default function DataStock() {
                 <TableHead>{language === 'en' ? 'Category' : 'Kategori'}</TableHead>
                 <TableHead>{language === 'en' ? 'Unit' : 'Satuan'}</TableHead>
                 <TableHead className="text-center">{language === 'en' ? 'Total Stock' : 'Total Stok'}</TableHead>
+                <TableHead className="text-center">{language === 'en' ? 'Booked' : 'Booked'}</TableHead>
+                <TableHead className="text-center">{language === 'en' ? 'Available' : 'Tersedia'}</TableHead>
                 <TableHead className="text-center">{language === 'en' ? 'Min Stock' : 'Stok Min'}</TableHead>
                 <TableHead className="text-center">{language === 'en' ? 'Batches' : 'Batch'}</TableHead>
                 <TableHead className="text-center">Status</TableHead>
@@ -344,7 +377,7 @@ export default function DataStock() {
             <TableBody>
               {paginatedData.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
                     {language === 'en' ? 'No stock data found' : 'Tidak ada data stok'}
                   </TableCell>
                 </TableRow>
@@ -378,6 +411,22 @@ export default function DataStock() {
                         <TableCell>{item.category}</TableCell>
                         <TableCell>{item.unit}</TableCell>
                         <TableCell className="text-center font-medium">{item.totalStock}</TableCell>
+                        <TableCell className="text-center">
+                          {item.totalBooked > 0 ? (
+                            <Badge variant="warning" className="font-mono">{item.totalBooked}</Badge>
+                          ) : (
+                            <span className="text-muted-foreground">0</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className={cn(
+                            "font-semibold",
+                            item.totalAvailable === 0 && "text-destructive",
+                            item.totalAvailable > 0 && item.totalAvailable <= item.min_stock && "text-warning"
+                          )}>
+                            {item.totalAvailable}
+                          </span>
+                        </TableCell>
                         <TableCell className="text-center">{item.min_stock}</TableCell>
                         <TableCell className="text-center">{item.batches.length}</TableCell>
                         <TableCell className="text-center">
@@ -393,7 +442,7 @@ export default function DataStock() {
                       
                       {isExpanded && item.batches.length > 0 && (
                         <TableRow>
-                          <TableCell colSpan={9} className="bg-muted/30 p-0">
+                          <TableCell colSpan={11} className="bg-muted/30 p-0">
                             <div className="p-4">
                               <h4 className="text-sm font-medium mb-3">
                                 {language === 'en' ? 'Batch Details (FEFO Order)' : 'Detail Batch (Urutan FEFO)'}
@@ -404,7 +453,9 @@ export default function DataStock() {
                                     <TableRow>
                                       <TableHead>{language === 'en' ? 'Batch No' : 'No. Batch'}</TableHead>
                                       <TableHead>{language === 'en' ? 'Expired Date' : 'Tgl. Kadaluarsa'}</TableHead>
-                                      <TableHead className="text-right">{language === 'en' ? 'Quantity' : 'Kuantitas'}</TableHead>
+                                      <TableHead className="text-right">{language === 'en' ? 'On Hand' : 'Stok Fisik'}</TableHead>
+                                      <TableHead className="text-right">{language === 'en' ? 'Booked' : 'Booked'}</TableHead>
+                                      <TableHead className="text-right">{language === 'en' ? 'Available' : 'Tersedia'}</TableHead>
                                       <TableHead className="text-center">Status</TableHead>
                                     </TableRow>
                                   </TableHeader>
@@ -437,6 +488,21 @@ export default function DataStock() {
                                               </div>
                                             </TableCell>
                                             <TableCell className="text-right">{batch.qty_on_hand} {item.unit}</TableCell>
+                                            <TableCell className="text-right">
+                                              {batch.qty_booked > 0 ? (
+                                                <Badge variant="warning" className="font-mono text-[10px]">
+                                                  {batch.qty_booked}
+                                                </Badge>
+                                              ) : (
+                                                <span className="text-muted-foreground">0</span>
+                                              )}
+                                            </TableCell>
+                                            <TableCell className={cn(
+                                              "text-right font-semibold",
+                                              batch.qty_available === 0 && "text-destructive"
+                                            )}>
+                                              {batch.qty_available} {item.unit}
+                                            </TableCell>
                                             <TableCell className="text-center">
                                               {expired ? (
                                                 <Badge variant="destructive">{language === 'en' ? 'Expired' : 'Kadaluarsa'}</Badge>
@@ -457,7 +523,7 @@ export default function DataStock() {
 
                       {isExpanded && item.batches.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={9} className="bg-muted/30 p-4 text-center text-muted-foreground">
+                          <TableCell colSpan={11} className="bg-muted/30 p-4 text-center text-muted-foreground">
                             {language === 'en' ? 'No batches available' : 'Tidak ada batch tersedia'}
                           </TableCell>
                         </TableRow>
