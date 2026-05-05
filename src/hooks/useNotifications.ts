@@ -912,6 +912,12 @@ export function useNotifications() {
           saveReadCommentIds(readCommentIdsRef.current);
         }
       }
+      // Persist canonical key so the same notification stays read across refetches
+      const key = notifKey(n);
+      if (key) {
+        readNotifKeysRef.current.add(key);
+        saveReadNotifKeys(readNotifKeysRef.current);
+      }
       return { ...n, read: true };
     }));
     setUnreadCount(prev => {
@@ -927,8 +933,11 @@ export function useNotifications() {
         if (n.type === 'card_comment' && n.commentIds?.length) {
           n.commentIds.forEach(cid => readCommentIdsRef.current.add(cid));
         }
+        const key = notifKey(n);
+        if (key) readNotifKeysRef.current.add(key);
       });
       saveReadCommentIds(readCommentIdsRef.current);
+      saveReadNotifKeys(readNotifKeysRef.current);
       return prev.map(n => ({ ...n, read: true }));
     });
     setUnreadCount(0);
