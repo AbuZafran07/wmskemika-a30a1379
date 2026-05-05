@@ -548,55 +548,6 @@ const PiPdfTemplateCompact = React.forwardRef<HTMLDivElement, PiPdfTemplateProps
                   </div>
                 </div>
 
-                {paymentScheme?.mode === 'dp_termin' && (
-                  <div
-                    style={{
-                      marginTop: '2.5mm',
-                      border: `0.35mm solid ${CORP_GREEN}`,
-                      borderRadius: '1mm',
-                      padding: '2.2mm 2.8mm',
-                      background: CORP_GREEN_LIGHT,
-                      fontSize: '3mm',
-                      lineHeight: '1.45',
-                      WebkitPrintColorAdjust: 'exact',
-                      printColorAdjust: 'exact',
-                      breakInside: 'avoid' as any,
-                      pageBreakInside: 'avoid',
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: '3.2mm',
-                        fontWeight: 800,
-                        color: CORP_GREEN,
-                        textTransform: 'uppercase',
-                        marginBottom: '1.5mm',
-                      }}
-                    >
-                      Rincian Pembayaran
-                    </div>
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: '1fr auto',
-                        rowGap: '0.6mm',
-                        columnGap: '3mm',
-                      }}
-                    >
-                      <div>DP ({paymentScheme.dpPercent}%) — dibayar saat order</div>
-                      <div style={{ textAlign: 'right', fontWeight: 700 }}>
-                        Rp {fmt(paymentScheme.dpAmount)}
-                      </div>
-                      <div>
-                        Sisa Pembayaran — {paymentScheme.termDescription}
-                      </div>
-                      <div style={{ textAlign: 'right', fontWeight: 700 }}>
-                        Rp {fmt(paymentScheme.remainingAmount)}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
                 {/* SIGNATURE */}
                 <div
                   style={{
