@@ -370,56 +370,69 @@ export default function ProformaInvoicePage() {
               </div>
 
               {/* Financial summary */}
-              <div className="border-t pt-4 space-y-1 text-sm">
-                {detail.discount > 0 && (
-                  <div className="flex justify-between text-red-600">
-                    <span>Diskon</span>
-                    <span>- {formatCurrency(detail.discount)}</span>
-                  </div>
-                )}
-                {detail.shipping_cost > 0 && (
-                  <div className="flex justify-between">
-                    <span>Biaya Pengiriman</span>
-                    <span>{formatCurrency(detail.shipping_cost)}</span>
-                  </div>
-                )}
-                {detail.other_costs > 0 && (
-                  <div className="flex justify-between">
-                    <span>Biaya Lainnya</span>
-                    <span>{formatCurrency(detail.other_costs)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span>Subtotal (Nilai DPP)</span>
-                  <span>{formatCurrency(detail.subtotal)}</span>
-                </div>
-                {detail.tax_amount > 0 && (
-                  <>
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>DPP Pengganti</span>
-                      <span>{formatCurrency(Math.round(detail.subtotal * 11 / 12))}</span>
-                    </div>
+              {/* Financial summary — match PDF layout */}
+              {(() => {
+                const dpPercent = Number(detail.dp_percent) || 0;
+                const dpAmount = dpPercent > 0 ? Math.round((detail.grand_total * dpPercent) / 100) : 0;
+                const balance = detail.grand_total - dpAmount;
+                const dppPengganti = detail.tax_amount > 0 ? Math.round(detail.subtotal * 11 / 12) : detail.subtotal;
+                return (
+                  <div className="border-t pt-4 space-y-1 text-sm">
                     <div className="flex justify-between">
-                      <span>PPN 12%</span>
-                      <span>{formatCurrency(detail.tax_amount)}</span>
+                      <span>DPP</span>
+                      <span>{formatCurrency(detail.subtotal)}</span>
                     </div>
-                  </>
-                )}
-                <div className="flex justify-between font-semibold border-t pt-1">
-                  <span>Total (DPP + PPN)</span>
-                  <span>{formatCurrency(detail.subtotal + (detail.tax_amount || 0))}</span>
-                </div>
-                {detail.materai_amount > 0 && (
-                  <div className="flex justify-between">
-                    <span>Bea Materai</span>
-                    <span>{formatCurrency(detail.materai_amount)}</span>
+                    {detail.tax_amount > 0 && (
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>DPP Pengganti</span>
+                        <span>{formatCurrency(dppPengganti)}</span>
+                      </div>
+                    )}
+                    {detail.tax_amount > 0 && (
+                      <div className="flex justify-between">
+                        <span>Pajak (PPN 12%)</span>
+                        <span>{formatCurrency(detail.tax_amount)}</span>
+                      </div>
+                    )}
+                    {detail.shipping_cost > 0 && (
+                      <div className="flex justify-between">
+                        <span>Biaya Pengantaran</span>
+                        <span>{formatCurrency(detail.shipping_cost)}</span>
+                      </div>
+                    )}
+                    {detail.other_costs > 0 && (
+                      <div className="flex justify-between">
+                        <span>Biaya Lainnya</span>
+                        <span>{formatCurrency(detail.other_costs)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-semibold border-t pt-2">
+                      <span>Sub Total</span>
+                      <span>{formatCurrency(detail.grand_total - (detail.materai_amount || 0))}</span>
+                    </div>
+                    {detail.materai_amount > 0 && (
+                      <div className="flex justify-between">
+                        <span>Bea Materai</span>
+                        <span>{formatCurrency(detail.materai_amount)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span>Down Payment{dpPercent > 0 ? ` (${dpPercent}%)` : ''}</span>
+                      <span>{dpAmount > 0 ? formatCurrency(dpAmount) : '-'}</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-base border-y py-2 mt-1">
+                      <span>Saldo</span>
+                      <span>{formatCurrency(balance)}</span>
+                    </div>
+                    {detail.payment_note && (
+                      <div className="mt-2 p-2 rounded border-l-4 border-primary bg-primary/5 text-xs">
+                        <span className="font-semibold">Note: </span>
+                        <span>{detail.payment_note}</span>
+                      </div>
+                    )}
                   </div>
-                )}
-                <div className="flex justify-between font-bold text-base border-t pt-2">
-                  <span>Grand Total</span>
-                  <span>{formatCurrency(detail.grand_total)}</span>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Rejection/Cancel reason */}
               {detail.rejected_reason && (
