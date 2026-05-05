@@ -485,7 +485,7 @@ export default function StockOut() {
               // FULL/FINAL shipment — cek apakah SO ini sebelumnya pernah partial
               // (ada >1 stock_out_headers aktif). Jika ya, tempel "Final Partial Delivery".
               try {
-                const totalStockOuts = (activeStockOuts || []).length;
+                const totalStockOuts = headerIds.length;
                 if (totalStockOuts > 1) {
                   const { data: finalLabel } = await supabase
                     .from("delivery_labels")
