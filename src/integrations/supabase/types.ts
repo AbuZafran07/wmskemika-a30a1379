@@ -950,11 +950,13 @@ export type Database = {
           customer_type: string | null
           delivery_request_id: string | null
           discount: number | null
+          dp_percent: number | null
           grand_total: number
           id: string
           materai_amount: number | null
           notes: string | null
           other_costs: number | null
+          payment_note: string | null
           payment_terms: string | null
           pi_number: string
           rejected_reason: string | null
@@ -964,6 +966,7 @@ export type Database = {
           subtotal: number
           tax_amount: number | null
           tax_rate: number | null
+          term_days: number | null
           updated_at: string | null
         }
         Insert: {
@@ -978,11 +981,13 @@ export type Database = {
           customer_type?: string | null
           delivery_request_id?: string | null
           discount?: number | null
+          dp_percent?: number | null
           grand_total?: number
           id?: string
           materai_amount?: number | null
           notes?: string | null
           other_costs?: number | null
+          payment_note?: string | null
           payment_terms?: string | null
           pi_number: string
           rejected_reason?: string | null
@@ -992,6 +997,7 @@ export type Database = {
           subtotal?: number
           tax_amount?: number | null
           tax_rate?: number | null
+          term_days?: number | null
           updated_at?: string | null
         }
         Update: {
@@ -1006,11 +1012,13 @@ export type Database = {
           customer_type?: string | null
           delivery_request_id?: string | null
           discount?: number | null
+          dp_percent?: number | null
           grand_total?: number
           id?: string
           materai_amount?: number | null
           notes?: string | null
           other_costs?: number | null
+          payment_note?: string | null
           payment_terms?: string | null
           pi_number?: string
           rejected_reason?: string | null
@@ -1020,6 +1028,7 @@ export type Database = {
           subtotal?: number
           tax_amount?: number | null
           tax_rate?: number | null
+          term_days?: number | null
           updated_at?: string | null
         }
         Relationships: [
