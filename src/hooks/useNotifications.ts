@@ -896,6 +896,91 @@ export function useNotifications() {
     };
   }, [fetchNotifications]);
 
+  // Auto-acknowledge: when the user opens a deep-linked target page
+  // (?type=&id= or legacy ?card= / ?id= / ?productId=), mark all matching
+  // notifications for that record as read automatically.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const explicitType = params.get('type') || '';
+    const explicitId = params.get('id') || '';
+    const cardId = params.get('card') || '';
+    const productId = params.get('productId') || '';
+
+    // Build candidate (type, id) pairs to acknowledge.
+    // If `type` param is present, trust it. Otherwise infer from pathname.
+    const candidates: Array<{ type: string; id: string }> = [];
+    if (explicitType && explicitId) {
+      candidates.push({ type: explicitType, id: explicitId });
+    }
+
+    const path = location.pathname;
+    const matchAny = (id: string) => {
+      if (!id) return;
+      if (path.startsWith('/request-delivery')) {
+        ['urgent_request', 'urgent_approved', 'urgent_rejected', 'card_comment'].forEach(t =>
+          candidates.push({ type: t, id })
+        );
+      } else if (path.startsWith('/plan-order') || path.startsWith('/sales-order') || path.startsWith('/stock-adjustment') || path.startsWith('/stock-in') || path.startsWith('/stock-out')) {
+        ['approval_pending', 'revision_requested', 'approved', 'cancelled', 'new_order'].forEach(t =>
+          candidates.push({ type: t, id })
+        );
+      } else if (path.startsWith('/data-stock')) {
+        candidates.push({ type: 'low_stock', id });
+      } else if (path.startsWith('/reports/expiry')) {
+        ['expiring_soon', 'expired'].forEach(t => candidates.push({ type: t, id }));
+      }
+    };
+    matchAny(cardId || explicitId);
+    matchAny(productId || explicitId);
+
+    if (candidates.length === 0) return;
+
+    let changed = false;
+    candidates.forEach(c => {
+      const key = `${c.type}:${c.id}`;
+      if (!readNotifKeysRef.current.has(key)) {
+        readNotifKeysRef.current.add(key);
+        changed = true;
+      }
+    });
+    if (changed) saveReadNotifKeys(readNotifKeysRef.current);
+
+    // Apply immediately to in-memory state and recompute counts.
+    setNotifications(prev => {
+      let touched = 0;
+      const next = prev.map(n => {
+        if (n.read) return n;
+        const key = notifKey(n);
+        if (key && readNotifKeysRef.current.has(key)) {
+          touched++;
+          // Persist underlying comment ids for card_comment / urgent so realtime
+          // refetch won't re-surface them.
+          if (n.type === 'card_comment' && n.commentIds?.length) {
+            n.commentIds.forEach(cid => readCommentIdsRef.current.add(cid));
+            saveReadCommentIds(readCommentIdsRef.current);
+          }
+          if (n.type === 'urgent_request' || n.type === 'urgent_approved' || n.type === 'urgent_rejected') {
+            const cid = n.id.replace(/^urgent_(req|approved|rejected)_/, '');
+            if (cid) {
+              readCommentIdsRef.current.add(cid);
+              saveReadCommentIds(readCommentIdsRef.current);
+            }
+          }
+          return { ...n, read: true };
+        }
+        return n;
+      });
+      if (touched > 0) {
+        setUnreadCount(c => {
+          const nc = Math.max(0, c - touched);
+          setBadgeCount(nc);
+          return nc;
+        });
+      }
+      return next;
+    });
+  }, [location.pathname, location.search]);
+
   const markAsRead = (id: string) => {
     setNotifications(prev => prev.map(n => {
       if (n.id !== id) return n;
