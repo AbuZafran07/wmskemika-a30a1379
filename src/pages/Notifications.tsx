@@ -115,19 +115,19 @@ export default function Notifications() {
   const handleNotificationClick = (notif: NotificationType) => {
     markAsRead(notif.id);
     if (notif.type === 'low_stock') {
-      navigate('/data-stock');
+      navigate(notif.productId ? `/data-stock?productId=${notif.productId}` : '/data-stock');
     } else if (notif.type === 'expiring_soon' || notif.type === 'expired') {
-      navigate('/reports/expiry');
+      navigate(notif.productId ? `/reports/expiry?productId=${notif.productId}` : '/reports/expiry');
     } else if (notif.module === 'plan_order') {
-      navigate('/plan-order');
+      navigate(notif.refId ? `/plan-order?id=${notif.refId}` : '/plan-order');
     } else if (notif.module === 'sales_order') {
-      navigate('/sales-order');
+      navigate(notif.refId ? `/sales-order?id=${notif.refId}` : '/sales-order');
     } else if (notif.module === 'stock_adjustment') {
-      navigate('/stock-adjustment');
+      navigate(notif.refId ? `/stock-adjustment?id=${notif.refId}` : '/stock-adjustment');
     } else if (notif.module === 'stock_in') {
-      navigate('/stock-in');
+      navigate(notif.refId ? `/stock-in?id=${notif.refId}` : '/stock-in');
     } else if (notif.module === 'stock_out') {
-      navigate('/stock-out');
+      navigate(notif.refId ? `/stock-out?id=${notif.refId}` : '/stock-out');
     } else if (notif.module === 'delivery' && notif.refId) {
       navigate(`/request-delivery?card=${notif.refId}`);
     } else if (notif.module === 'delivery') {
