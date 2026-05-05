@@ -551,7 +551,7 @@ export function useNotifications() {
       console.error('Error fetching notifications:', error);
     }
     setLoading(false);
-  }, [soundEnabled, pushEnabled, user?.role]);
+  }, [soundEnabled, pushEnabled, user?.role, user?.id]);
 
   // Setup real-time subscriptions
   useEffect(() => {
