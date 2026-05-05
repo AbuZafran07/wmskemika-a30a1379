@@ -386,10 +386,62 @@ export default function WmsAssistant() {
 
           {/* Quick prompts */}
           <div className="border-t px-3 py-2 flex-shrink-0 bg-muted/20">
-            <div className="flex items-center gap-1.5 mb-1.5 text-xs text-muted-foreground">
-              <Lightbulb className="w-3.5 h-3.5" />
-              {language === "en" ? "Quick help" : "Bantuan cepat"}
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Lightbulb className="w-3.5 h-3.5" />
+                {language === "en" ? "Quick help" : "Bantuan cepat"}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs gap-1"
+                onClick={() => setDiagOpen((v) => !v)}
+                disabled={isLoading}
+              >
+                <Stethoscope className="w-3.5 h-3.5" />
+                {language === "en" ? "Diagnose stock" : "Diagnostik stok"}
+              </Button>
             </div>
+            {diagOpen && (
+              <div className="mb-2 rounded-md border bg-background p-2 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium">
+                    {language === "en"
+                      ? "Diagnose: On Hand vs Booked vs Available"
+                      : "Diagnostik: On Hand vs Booked vs Available"}
+                  </span>
+                  <Button variant="ghost" size="iconSm" onClick={() => setDiagOpen(false)}>
+                    <X className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+                <SearchableSelect
+                  options={productOpts}
+                  value={selectedProductId}
+                  onValueChange={setSelectedProductId}
+                  placeholder={
+                    productsLoading
+                      ? language === "en" ? "Loading products..." : "Memuat produk..."
+                      : language === "en" ? "Select product" : "Pilih produk"
+                  }
+                  searchPlaceholder={language === "en" ? "Search product..." : "Cari produk..."}
+                  emptyMessage={language === "en" ? "No products" : "Tidak ada produk"}
+                  disabled={productsLoading}
+                />
+                <Button
+                  size="sm"
+                  className="w-full h-8 text-xs gap-1"
+                  disabled={!selectedProductId || diagRunning}
+                  onClick={runDiagnostic}
+                >
+                  {diagRunning ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Stethoscope className="w-3.5 h-3.5" />
+                  )}
+                  {language === "en" ? "Run diagnostic" : "Jalankan diagnostik"}
+                </Button>
+              </div>
+            )}
             <div className="flex flex-wrap gap-1.5">
               {quickPrompts.map((q, i) => (
                 <Button
