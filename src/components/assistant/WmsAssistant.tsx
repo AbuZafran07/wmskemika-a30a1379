@@ -127,6 +127,10 @@ export default function WmsAssistant() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [compressing, setCompressing] = useState(false);
 
   // Diagnostic mode state
   const [diagOpen, setDiagOpen] = useState(false);
@@ -239,10 +243,65 @@ export default function WmsAssistant() {
     navigate(path);
   };
 
+  const addImageFiles = async (files: File[]) => {
+    const imgs = files.filter((f) => f.type.startsWith("image/"));
+    if (!imgs.length) return;
+    const room = MAX_IMAGES_PER_MESSAGE - attachments.length;
+    if (room <= 0) {
+      toast.error(language === "en" ? `Max ${MAX_IMAGES_PER_MESSAGE} images per message` : `Maks ${MAX_IMAGES_PER_MESSAGE} gambar per pesan`);
+      return;
+    }
+    setCompressing(true);
+    try {
+      const picked = imgs.slice(0, room);
+      const results: Attachment[] = [];
+      for (const f of picked) {
+        try {
+          const dataUrl = await compressToWebp(f);
+          // Approximate decoded byte size from base64
+          const b64 = dataUrl.split(",")[1] || "";
+          results.push({ dataUrl, size: Math.floor((b64.length * 3) / 4) });
+        } catch (e) {
+          console.error("compress fail", e);
+        }
+      }
+      if (results.length) setAttachments((prev) => [...prev, ...results]);
+    } finally {
+      setCompressing(false);
+    }
+  };
+
+  const removeAttachment = (idx: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const onPaste = async (e: React.ClipboardEvent) => {
+    const items = Array.from(e.clipboardData?.items || []);
+    const files: File[] = [];
+    for (const it of items) {
+      if (it.kind === "file") {
+        const f = it.getAsFile();
+        if (f && f.type.startsWith("image/")) files.push(f);
+      }
+    }
+    if (files.length) {
+      e.preventDefault();
+      await addImageFiles(files);
+    }
+  };
+
+  const onDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer?.files || []);
+    if (files.length) await addImageFiles(files);
+  };
+
   const send = async (override?: string) => {
     const text = (override ?? input).trim();
-    if (!text || isLoading) return;
-    const userMsg: Msg = { role: "user", content: text };
+    const imgs = attachments.map((a) => a.dataUrl);
+    if ((!text && imgs.length === 0) || isLoading) return;
+    const userMsg: Msg = { role: "user", content: text, images: imgs.length ? imgs : undefined };
     // Inject page context as a system-style note (only on first turn or every turn — keep simple every turn)
     const ctxNote: Msg = {
       role: "user",
@@ -255,9 +314,20 @@ export default function WmsAssistant() {
           : " Saat menyarankan tindakan, sisipkan link modul dalam format markdown: [Buka Stock In](/stock-in), [Buka Sales Order](/sales-order), dll, hanya gunakan route aplikasi yang valid."),
     };
     const next = [...messages, userMsg];
-    const payload = [ctxNote, ...next];
+    // Build payload: convert messages with images to multimodal content arrays
+    const payload = [ctxNote, ...next].map((m) => {
+      if (m.role === "user" && m.images && m.images.length > 0) {
+        const parts: any[] = [];
+        if (m.content) parts.push({ type: "text", text: m.content });
+        else parts.push({ type: "text", text: language === "en" ? "(see attached screenshot)" : "(lihat screenshot terlampir)" });
+        for (const url of m.images) parts.push({ type: "image_url", image_url: { url } });
+        return { role: m.role, content: parts };
+      }
+      return { role: m.role, content: m.content };
+    });
     setMessages(next);
     setInput("");
+    setAttachments([]);
     setIsLoading(true);
 
     let assistantSoFar = "";
