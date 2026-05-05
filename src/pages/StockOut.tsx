@@ -402,20 +402,25 @@ export default function StockOut() {
               .select("id, ordered_qty, qty_delivered")
               .eq("sales_order_id", selectedSalesOrderId);
 
-            // Ambil semua stock_out_items aktif untuk SO ini (lewat header)
-            const { data: activeStockOuts } = await supabase
+            // Ambil semua stock_out_items aktif untuk SO ini (query terpisah karena tidak ada FK)
+            const { data: activeHeaders } = await supabase
               .from("stock_out_headers")
-              .select("id, booking_status, stock_out_items(sales_order_item_id, qty_out)")
+              .select("id")
               .eq("sales_order_id", selectedSalesOrderId)
               .in("booking_status", ["booked", "delivered"]);
 
+            const headerIds = (activeHeaders || []).map((h: any) => h.id);
             const bookedByItem = new Map<string, number>();
-            (activeStockOuts || []).forEach((h: any) => {
-              (h.stock_out_items || []).forEach((si: any) => {
+            if (headerIds.length > 0) {
+              const { data: activeItems } = await supabase
+                .from("stock_out_items")
+                .select("sales_order_item_id, qty_out")
+                .in("stock_out_id", headerIds);
+              (activeItems || []).forEach((si: any) => {
                 const cur = bookedByItem.get(si.sales_order_item_id) || 0;
                 bookedByItem.set(si.sales_order_item_id, cur + (si.qty_out || 0));
               });
-            });
+            }
 
             const hasRemaining = remainingItems?.some((item) => {
               const booked = bookedByItem.get(item.id) || 0;
