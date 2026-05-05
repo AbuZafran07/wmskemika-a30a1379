@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sparkles, Send, Loader2, Trash2, ExternalLink, Lightbulb, Stethoscope, X } from "lucide-react";
+import { Sparkles, Send, Loader2, Trash2, ExternalLink, Lightbulb, Stethoscope, X, Paperclip, ImageIcon } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -11,9 +11,41 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { SearchableSelect, type SearchableSelectOption } from "@/components/ui/searchable-select";
 
-type Msg = { role: "user" | "assistant"; content: string };
+type Attachment = { dataUrl: string; size: number };
+type Msg = {
+  role: "user" | "assistant";
+  content: string;
+  images?: string[]; // data URLs (webp) for display + sending
+};
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/wms-assistant`;
+
+const MAX_IMAGES_PER_MESSAGE = 4;
+const MAX_IMAGE_DIMENSION = 1920;
+
+// Compress an image File/Blob to WebP, max 1920px on the longest side.
+async function compressToWebp(file: File | Blob): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  let { width, height } = bitmap;
+  if (width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
+    const ratio = Math.min(MAX_IMAGE_DIMENSION / width, MAX_IMAGE_DIMENSION / height);
+    width = Math.round(width * ratio);
+    height = Math.round(height * ratio);
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("canvas ctx");
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close?.();
+  // Try webp; fall back to jpeg if browser cannot encode webp
+  let dataUrl = canvas.toDataURL("image/webp", 0.85);
+  if (!dataUrl.startsWith("data:image/webp")) {
+    dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+  }
+  return dataUrl;
+}
 
 const ROUTE_LABELS: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -95,6 +127,10 @@ export default function WmsAssistant() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [compressing, setCompressing] = useState(false);
 
   // Diagnostic mode state
   const [diagOpen, setDiagOpen] = useState(false);
@@ -207,10 +243,65 @@ export default function WmsAssistant() {
     navigate(path);
   };
 
+  const addImageFiles = async (files: File[]) => {
+    const imgs = files.filter((f) => f.type.startsWith("image/"));
+    if (!imgs.length) return;
+    const room = MAX_IMAGES_PER_MESSAGE - attachments.length;
+    if (room <= 0) {
+      toast.error(language === "en" ? `Max ${MAX_IMAGES_PER_MESSAGE} images per message` : `Maks ${MAX_IMAGES_PER_MESSAGE} gambar per pesan`);
+      return;
+    }
+    setCompressing(true);
+    try {
+      const picked = imgs.slice(0, room);
+      const results: Attachment[] = [];
+      for (const f of picked) {
+        try {
+          const dataUrl = await compressToWebp(f);
+          // Approximate decoded byte size from base64
+          const b64 = dataUrl.split(",")[1] || "";
+          results.push({ dataUrl, size: Math.floor((b64.length * 3) / 4) });
+        } catch (e) {
+          console.error("compress fail", e);
+        }
+      }
+      if (results.length) setAttachments((prev) => [...prev, ...results]);
+    } finally {
+      setCompressing(false);
+    }
+  };
+
+  const removeAttachment = (idx: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const onPaste = async (e: React.ClipboardEvent) => {
+    const items = Array.from(e.clipboardData?.items || []);
+    const files: File[] = [];
+    for (const it of items) {
+      if (it.kind === "file") {
+        const f = it.getAsFile();
+        if (f && f.type.startsWith("image/")) files.push(f);
+      }
+    }
+    if (files.length) {
+      e.preventDefault();
+      await addImageFiles(files);
+    }
+  };
+
+  const onDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer?.files || []);
+    if (files.length) await addImageFiles(files);
+  };
+
   const send = async (override?: string) => {
     const text = (override ?? input).trim();
-    if (!text || isLoading) return;
-    const userMsg: Msg = { role: "user", content: text };
+    const imgs = attachments.map((a) => a.dataUrl);
+    if ((!text && imgs.length === 0) || isLoading) return;
+    const userMsg: Msg = { role: "user", content: text, images: imgs.length ? imgs : undefined };
     // Inject page context as a system-style note (only on first turn or every turn — keep simple every turn)
     const ctxNote: Msg = {
       role: "user",
@@ -223,9 +314,20 @@ export default function WmsAssistant() {
           : " Saat menyarankan tindakan, sisipkan link modul dalam format markdown: [Buka Stock In](/stock-in), [Buka Sales Order](/sales-order), dll, hanya gunakan route aplikasi yang valid."),
     };
     const next = [...messages, userMsg];
-    const payload = [ctxNote, ...next];
+    // Build payload: convert messages with images to multimodal content arrays
+    const payload = [ctxNote, ...next].map((m) => {
+      if (m.role === "user" && m.images && m.images.length > 0) {
+        const parts: any[] = [];
+        if (m.content) parts.push({ type: "text", text: m.content });
+        else parts.push({ type: "text", text: language === "en" ? "(see attached screenshot)" : "(lihat screenshot terlampir)" });
+        for (const url of m.images) parts.push({ type: "image_url", image_url: { url } });
+        return { role: m.role, content: parts };
+      }
+      return { role: m.role, content: m.content };
+    });
     setMessages(next);
     setInput("");
+    setAttachments([]);
     setIsLoading(true);
 
     let assistantSoFar = "";
@@ -328,7 +430,21 @@ export default function WmsAssistant() {
       </Button>
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+        <SheetContent
+          side="right"
+          className="w-full sm:max-w-md p-0 flex flex-col relative"
+          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={onDrop}
+        >
+          {isDragging && (
+            <div className="absolute inset-0 z-50 bg-primary/10 border-2 border-dashed border-primary rounded-md pointer-events-none flex items-center justify-center">
+              <div className="bg-background rounded-md px-4 py-2 text-sm font-medium flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-primary" />
+                {language === "en" ? "Drop image to attach" : "Lepas gambar untuk dilampirkan"}
+              </div>
+            </div>
+          )}
           <SheetHeader className="px-4 py-3 border-b flex-shrink-0">
             <SheetTitle className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-primary" />
@@ -370,6 +486,19 @@ export default function WmsAssistant() {
                       : "mr-auto bg-muted text-foreground"
                   )}
                 >
+                  {m.images && m.images.length > 0 && (
+                    <div className={cn("flex flex-wrap gap-1.5 mb-1.5", m.content ? "" : "mb-0")}>
+                      {m.images.map((src, k) => (
+                        <a key={k} href={src} target="_blank" rel="noreferrer" className="block">
+                          <img
+                            src={src}
+                            alt={`attachment-${k}`}
+                            className="h-24 w-24 object-cover rounded border border-border/40"
+                          />
+                        </a>
+                      ))}
+                    </div>
+                  )}
                   {m.role === "assistant"
                     ? renderAssistantContent(m.content || (isLoading && i === messages.length - 1 ? "…" : ""), handleNavigate)
                     : m.content}
@@ -458,18 +587,75 @@ export default function WmsAssistant() {
             </div>
           </div>
 
-          <div className="border-t p-3 flex gap-2 flex-shrink-0">
-            <Textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={onKey}
-              placeholder={placeholder}
-              className="min-h-[44px] max-h-32 resize-none text-sm"
-              disabled={isLoading}
-            />
-            <Button onClick={() => send()} disabled={isLoading || !input.trim()} size="icon" className="flex-shrink-0">
-              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            </Button>
+          <div className="border-t p-3 flex flex-col gap-2 flex-shrink-0">
+            {attachments.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {attachments.map((a, i) => (
+                  <div key={i} className="relative group">
+                    <img
+                      src={a.dataUrl}
+                      alt={`pending-${i}`}
+                      className="h-14 w-14 object-cover rounded border border-border"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeAttachment(i)}
+                      className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full w-4 h-4 flex items-center justify-center opacity-90 hover:opacity-100"
+                      title={language === "en" ? "Remove" : "Hapus"}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+                {compressing && (
+                  <div className="h-14 w-14 rounded border border-dashed flex items-center justify-center">
+                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={async (e) => {
+                  const files = Array.from(e.target.files || []);
+                  await addImageFiles(files);
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="flex-shrink-0"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isLoading || compressing || attachments.length >= MAX_IMAGES_PER_MESSAGE}
+                title={language === "en" ? "Attach screenshot" : "Lampirkan screenshot"}
+              >
+                <Paperclip className="w-4 h-4" />
+              </Button>
+              <Textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={onKey}
+                onPaste={onPaste}
+                placeholder={placeholder}
+                className="min-h-[44px] max-h-32 resize-none text-sm"
+                disabled={isLoading}
+              />
+              <Button
+                onClick={() => send()}
+                disabled={isLoading || compressing || (!input.trim() && attachments.length === 0)}
+                size="icon"
+                className="flex-shrink-0"
+              >
+                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              </Button>
+            </div>
           </div>
         </SheetContent>
       </Sheet>
