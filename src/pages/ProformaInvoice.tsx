@@ -582,6 +582,7 @@ export default function ProformaInvoicePage() {
               subTotal: subTotalCalc,
               stampDuty: materai,
               downPayment: dpAmount,
+              dpPercent,
               balance: saldo,
             },
             signatory: {
