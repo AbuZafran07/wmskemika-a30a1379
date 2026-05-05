@@ -412,6 +412,77 @@ export function useNotifications() {
         }
       }
 
+      // Fetch recent card comments (last 7 days) on cards the user is involved in
+      if (user?.id) {
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+        // Find cards user is involved in: created_by, assigned_to, or has previously commented
+        const [{ data: ownedCards }, { data: commentedCards }] = await Promise.all([
+          supabase
+            .from('delivery_requests')
+            .select('id')
+            .or(`created_by.eq.${user.id},assigned_to.eq.${user.id}`),
+          supabase
+            .from('delivery_comments')
+            .select('delivery_request_id')
+            .eq('user_id', user.id)
+            .gte('created_at', sevenDaysAgo.toISOString()),
+        ]);
+
+        const involvedIds = new Set<string>([
+          ...(ownedCards || []).map((c: any) => c.id),
+          ...(commentedCards || []).map((c: any) => c.delivery_request_id),
+        ]);
+
+        if (involvedIds.size > 0) {
+          const { data: recentComments } = await supabase
+            .from('delivery_comments')
+            .select('id, delivery_request_id, user_id, message, created_at, type')
+            .in('delivery_request_id', Array.from(involvedIds))
+            .eq('type', 'comment')
+            .neq('user_id', user.id)
+            .gte('created_at', sevenDaysAgo.toISOString())
+            .order('created_at', { ascending: false })
+            .limit(50);
+
+          if (recentComments && recentComments.length > 0) {
+            const senderIds = [...new Set(recentComments.map((c: any) => c.user_id))];
+            const drIds = [...new Set(recentComments.map((c: any) => c.delivery_request_id))];
+            const [{ data: senderProfiles }, { data: drList }] = await Promise.all([
+              supabase.from('profiles').select('id, full_name').in('id', senderIds),
+              supabase
+                .from('delivery_requests')
+                .select('id, sales_order_id, sales_order_headers!inner(sales_order_number)')
+                .in('id', drIds),
+            ]);
+
+            const drSoMap: Record<string, string> = {};
+            drList?.forEach((dr: any) => {
+              drSoMap[dr.id] = dr.sales_order_headers?.sales_order_number || '';
+            });
+
+            recentComments.forEach((c: any) => {
+              const senderName = senderProfiles?.find((p: any) => p.id === c.user_id)?.full_name || 'Seseorang';
+              const soNumber = drSoMap[c.delivery_request_id] || '';
+              const soLabel = soNumber ? ` [${soNumber}]` : '';
+              const preview = c.message.length > 100 ? `${c.message.substring(0, 100)}...` : c.message;
+              notifs.push({
+                id: `card_comment_${c.id}`,
+                type: 'card_comment',
+                title: `💬 Komentar baru${soLabel}`,
+                message: `${senderName}: ${preview}`,
+                module: 'delivery',
+                refId: c.delivery_request_id,
+                refNo: soNumber,
+                createdAt: new Date(c.created_at),
+                read: false,
+              });
+            });
+          }
+        }
+      }
+
       // Sort by priority and date
       notifs.sort((a, b) => {
         const priority: Record<string, number> = { 
@@ -424,9 +495,10 @@ export function useNotifications() {
           expiring_soon: 6, 
           low_stock: 7, 
           new_order: 8,
-          approved: 9,
-          cancelled: 10,
-          info: 11 
+          card_comment: 9,
+          approved: 10,
+          cancelled: 11,
+          info: 12 
         };
         const priorityDiff = priority[a.type] - priority[b.type];
         if (priorityDiff !== 0) return priorityDiff;
