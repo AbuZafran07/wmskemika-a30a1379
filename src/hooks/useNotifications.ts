@@ -359,8 +359,10 @@ export function useNotifications() {
           .limit(20);
 
         if (urgentRequests && urgentRequests.length > 0) {
-          const requesterIds = [...new Set(urgentRequests.map(r => r.user_id))];
-          const deliveryRequestIds = [...new Set(urgentRequests.map(r => r.delivery_request_id))];
+          const readSet = readCommentIdsRef.current;
+          const filteredUrgent = urgentRequests.filter((r: any) => !readSet.has(r.id));
+          const requesterIds = [...new Set(filteredUrgent.map((r: any) => r.user_id))];
+          const deliveryRequestIds = [...new Set(filteredUrgent.map((r: any) => r.delivery_request_id))];
           
           const [{ data: requesterProfiles }, { data: deliveryRequests }] = await Promise.all([
             supabase.from('profiles').select('id, full_name').in('id', requesterIds),
@@ -372,7 +374,7 @@ export function useNotifications() {
             soMap[dr.id] = dr.sales_order_headers?.sales_order_number || '';
           });
 
-          urgentRequests.forEach((req: any) => {
+          filteredUrgent.forEach((req: any) => {
             const requesterName = requesterProfiles?.find(p => p.id === req.user_id)?.full_name || 'Unknown';
             const soNumber = soMap[req.delivery_request_id] || '';
             const soLabel = soNumber ? ` [${soNumber}]` : '';
