@@ -394,14 +394,34 @@ export default function StockOut() {
             }
 
             // Check if SO still has remaining items (partial delivery)
+            // IMPORTANT: Karena Stock Out sekarang hanya booking (qty_delivered baru di-update
+            // saat confirm_delivery), kita harus hitung sisa = ordered_qty - qty_delivered
+            // - total qty_out dari semua stock_out_items aktif (booked/delivered, bukan cancelled).
             const { data: remainingItems } = await supabase
               .from("sales_order_items")
               .select("id, ordered_qty, qty_delivered")
               .eq("sales_order_id", selectedSalesOrderId);
 
-            const hasRemaining = remainingItems?.some(
-              (item) => (item.ordered_qty - (item.qty_delivered || 0)) > 0
-            );
+            // Ambil semua stock_out_items aktif untuk SO ini (lewat header)
+            const { data: activeStockOuts } = await supabase
+              .from("stock_out_headers")
+              .select("id, booking_status, stock_out_items(sales_order_item_id, qty_out)")
+              .eq("sales_order_id", selectedSalesOrderId)
+              .in("booking_status", ["booked", "delivered"]);
+
+            const bookedByItem = new Map<string, number>();
+            (activeStockOuts || []).forEach((h: any) => {
+              (h.stock_out_items || []).forEach((si: any) => {
+                const cur = bookedByItem.get(si.sales_order_item_id) || 0;
+                bookedByItem.set(si.sales_order_item_id, cur + (si.qty_out || 0));
+              });
+            });
+
+            const hasRemaining = remainingItems?.some((item) => {
+              const booked = bookedByItem.get(item.id) || 0;
+              const remaining = item.ordered_qty - (item.qty_delivered || 0) - booked;
+              return remaining > 0;
+            });
 
             if (hasRemaining) {
               // Create new card in checking for remaining items (ready for next stock out)
