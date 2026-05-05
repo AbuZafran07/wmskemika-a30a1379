@@ -96,6 +96,99 @@ export default function WmsAssistant() {
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Diagnostic mode state
+  const [diagOpen, setDiagOpen] = useState(false);
+  const [productOpts, setProductOpts] = useState<SearchableSelectOption[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [selectedProductId, setSelectedProductId] = useState("");
+  const [diagRunning, setDiagRunning] = useState(false);
+
+  useEffect(() => {
+    if (!diagOpen || productOpts.length > 0) return;
+    setProductsLoading(true);
+    supabase
+      .from("products")
+      .select("id, name, sku")
+      .is("deleted_at", null)
+      .eq("is_active", true)
+      .order("name")
+      .limit(1000)
+      .then(({ data }) => {
+        setProductOpts(
+          (data || []).map((p: any) => ({
+            value: p.id,
+            label: p.name,
+            description: p.sku || undefined,
+          }))
+        );
+        setProductsLoading(false);
+      });
+  }, [diagOpen, productOpts.length]);
+
+  const runDiagnostic = async () => {
+    if (!selectedProductId || diagRunning) return;
+    setDiagRunning(true);
+    try {
+      const product = productOpts.find((p) => p.value === selectedProductId);
+      // 1. Batches
+      const { data: batches } = await supabase
+        .from("inventory_batches")
+        .select("id, batch_no, qty_on_hand, expired_date")
+        .eq("product_id", selectedProductId)
+        .order("expired_date", { ascending: true, nullsFirst: false });
+
+      // 2. Active bookings (stock_out_items joined to headers booking_status='booked')
+      const { data: bookedItems } = await supabase
+        .from("stock_out_items")
+        .select(
+          "qty_out, batch_id, stock_out_id, stock_out_headers!inner(stock_out_number, booking_status, sales_order_id, sales_order_headers(sales_order_number, customer_id, customers(name)))"
+        )
+        .eq("product_id", selectedProductId)
+        .eq("stock_out_headers.booking_status", "booked");
+
+      const totalOnHand = (batches || []).reduce((s, b: any) => s + (b.qty_on_hand || 0), 0);
+      const totalBooked = (bookedItems || []).reduce((s, it: any) => s + (it.qty_out || 0), 0);
+      const available = totalOnHand - totalBooked;
+
+      // Build context payload for AI
+      const summary = {
+        product: product?.label,
+        sku: product?.description,
+        on_hand: totalOnHand,
+        booked: totalBooked,
+        available,
+        batches: (batches || []).map((b: any) => ({
+          batch_no: b.batch_no,
+          qty: b.qty_on_hand,
+          expired_date: b.expired_date,
+        })),
+        active_bookings: (bookedItems || []).map((it: any) => ({
+          stock_out_no: it.stock_out_headers?.stock_out_number,
+          sales_order_no: it.stock_out_headers?.sales_order_headers?.sales_order_number,
+          customer: it.stock_out_headers?.sales_order_headers?.customers?.name,
+          qty: it.qty_out,
+        })),
+      };
+
+      const promptText =
+        (language === "en"
+          ? `Run DIAGNOSTIC for product "${product?.label}". Explain step by step why Available is ${available} (On Hand=${totalOnHand}, Booked=${totalBooked}). Reference each batch and active booking. Suggest concrete actions with module links if needed. Use bullet points and a clear numbered explanation.`
+          : `Jalankan DIAGNOSTIK untuk produk "${product?.label}". Jelaskan langkah demi langkah kenapa Available = ${available} (On Hand=${totalOnHand}, Booked=${totalBooked}). Sebutkan tiap batch dan booking aktif yang relevan. Beri saran tindakan konkret beserta link modul bila perlu. Gunakan bullet dan penjelasan bernomor yang jelas.`) +
+        `\n\n[DATA]\n` +
+        "```json\n" +
+        JSON.stringify(summary, null, 2) +
+        "\n```";
+
+      setDiagOpen(false);
+      await send(promptText);
+    } catch (e) {
+      console.error(e);
+      toast.error(language === "en" ? "Diagnostic failed" : "Diagnostik gagal");
+    } finally {
+      setDiagRunning(false);
+    }
+  };
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
