@@ -476,6 +476,35 @@ export default function StockOut() {
               }
 
               toast.info("Pengiriman partial: Card baru dibuat di New Orders untuk sisa barang");
+            } else {
+              // FULL/FINAL shipment — cek apakah SO ini sebelumnya pernah partial
+              // (ada >1 stock_out_headers aktif). Jika ya, tempel "Final Partial Delivery".
+              try {
+                const totalStockOuts = (activeStockOuts || []).length;
+                if (totalStockOuts > 1) {
+                  const { data: finalLabel } = await supabase
+                    .from("delivery_labels")
+                    .select("id")
+                    .ilike("name", "Final Partial Delivery")
+                    .maybeSingle();
+                  if (finalLabel?.id) {
+                    const { data: existing } = await supabase
+                      .from("delivery_card_labels")
+                      .select("id")
+                      .eq("delivery_request_id", deliveryCard.id)
+                      .eq("label_id", finalLabel.id)
+                      .maybeSingle();
+                    if (!existing) {
+                      await supabase.from("delivery_card_labels").insert({
+                        delivery_request_id: deliveryCard.id,
+                        label_id: finalLabel.id,
+                      });
+                    }
+                  }
+                }
+              } catch (labelErr) {
+                console.error("Failed to auto-attach Final Partial Delivery label:", labelErr);
+              }
             }
           }
         } else if (!findError) {
