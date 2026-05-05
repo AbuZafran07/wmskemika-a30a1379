@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sparkles, Send, Loader2, Trash2, ExternalLink, Lightbulb, Stethoscope, X, Paperclip, ImageIcon } from "lucide-react";
+import { Sparkles, Send, Loader2, Trash2, ExternalLink, Lightbulb, Stethoscope, X, Paperclip, ImageIcon, ScanSearch } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -12,6 +12,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { SearchableSelect, type SearchableSelectOption } from "@/components/ui/searchable-select";
 
 type Attachment = { dataUrl: string; size: number };
+type Suggestion = {
+  issue_type: string;
+  summary: string;
+  suggested_questions: string[];
+};
 type Msg = {
   role: "user" | "assistant";
   content: string;
@@ -131,6 +136,8 @@ export default function WmsAssistant() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [compressing, setCompressing] = useState(false);
+  const [classifying, setClassifying] = useState(false);
+  const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
 
   // Diagnostic mode state
   const [diagOpen, setDiagOpen] = useState(false);
@@ -273,6 +280,7 @@ export default function WmsAssistant() {
 
   const removeAttachment = (idx: number) => {
     setAttachments((prev) => prev.filter((_, i) => i !== idx));
+    setSuggestion(null);
   };
 
   const onPaste = async (e: React.ClipboardEvent) => {
@@ -296,6 +304,51 @@ export default function WmsAssistant() {
     const files = Array.from(e.dataTransfer?.files || []);
     if (files.length) await addImageFiles(files);
   };
+
+  // Auto-classify whenever attachments change (on add). Cleared on send/remove.
+  useEffect(() => {
+    if (attachments.length === 0) {
+      setSuggestion(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setClassifying(true);
+      try {
+        const parts: any[] = [
+          {
+            type: "text",
+            text:
+              language === "en"
+                ? "Classify this WMS screenshot and suggest the best follow-up question."
+                : "Klasifikasikan screenshot WMS ini dan sarankan pertanyaan paling sesuai.",
+          },
+          ...attachments.map((a) => ({ type: "image_url", image_url: { url: a.dataUrl } })),
+        ];
+        const resp = await fetch(CHAT_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ mode: "classify", messages: [{ role: "user", content: parts }] }),
+        });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (!cancelled && data?.suggested_questions?.length) {
+          setSuggestion(data);
+        }
+      } catch (e) {
+        console.error("classify error", e);
+      } finally {
+        if (!cancelled) setClassifying(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attachments]);
 
   const send = async (override?: string) => {
     const text = (override ?? input).trim();
@@ -328,6 +381,7 @@ export default function WmsAssistant() {
     setMessages(next);
     setInput("");
     setAttachments([]);
+    setSuggestion(null);
     setIsLoading(true);
 
     let assistantSoFar = "";
