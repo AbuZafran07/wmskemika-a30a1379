@@ -1,4 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { notifyNewStockAdjustment } from '@/lib/pushNotifications';
 import { securePrint, printStyles } from '@/lib/printUtils';
 import { Plus, Search, Eye, Edit, MoreHorizontal, CheckCircle, XCircle, Loader2, Upload, ArrowLeft, Trash2, Printer, Archive, List, TrendingUp, TrendingDown, AlertTriangle, Split, Merge } from 'lucide-react';
@@ -634,6 +635,21 @@ export default function StockAdjustment() {
     setSelectedAdjustment(adj);
     setIsDetailDialogOpen(true);
   };
+
+  // Auto-open detail dialog from URL query param ?id=<adjustmentId>
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const id = searchParams.get('id');
+    if (!id || adjustments.length === 0) return;
+    const adj = adjustments.find((a) => a.id === id);
+    if (adj) {
+      handleViewDetail(adj);
+      const next = new URLSearchParams(searchParams);
+      next.delete('id');
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, adjustments]);
 
   const handleEdit = async (adj: StockAdjustmentHeader) => {
     setAdjustmentNumber(adj.adjustment_number);
