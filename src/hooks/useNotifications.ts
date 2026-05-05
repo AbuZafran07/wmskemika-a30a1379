@@ -359,8 +359,10 @@ export function useNotifications() {
           .limit(20);
 
         if (urgentRequests && urgentRequests.length > 0) {
-          const requesterIds = [...new Set(urgentRequests.map(r => r.user_id))];
-          const deliveryRequestIds = [...new Set(urgentRequests.map(r => r.delivery_request_id))];
+          const readSet = readCommentIdsRef.current;
+          const filteredUrgent = urgentRequests.filter((r: any) => !readSet.has(r.id));
+          const requesterIds = [...new Set(filteredUrgent.map((r: any) => r.user_id))];
+          const deliveryRequestIds = [...new Set(filteredUrgent.map((r: any) => r.delivery_request_id))];
           
           const [{ data: requesterProfiles }, { data: deliveryRequests }] = await Promise.all([
             supabase.from('profiles').select('id, full_name').in('id', requesterIds),
@@ -372,7 +374,7 @@ export function useNotifications() {
             soMap[dr.id] = dr.sales_order_headers?.sales_order_number || '';
           });
 
-          urgentRequests.forEach((req: any) => {
+          filteredUrgent.forEach((req: any) => {
             const requesterName = requesterProfiles?.find(p => p.id === req.user_id)?.full_name || 'Unknown';
             const soNumber = soMap[req.delivery_request_id] || '';
             const soLabel = soNumber ? ` [${soNumber}]` : '';
@@ -403,8 +405,10 @@ export function useNotifications() {
           .limit(20);
 
         if (resolvedRequests && resolvedRequests.length > 0) {
-          const approverIds = [...new Set(resolvedRequests.map(r => r.approved_by).filter(Boolean))];
-          const resolvedDeliveryIds = [...new Set(resolvedRequests.map(r => r.delivery_request_id))];
+          const readSet = readCommentIdsRef.current;
+          const filteredResolved = resolvedRequests.filter((r: any) => !readSet.has(r.id));
+          const approverIds = [...new Set(filteredResolved.map((r: any) => r.approved_by).filter(Boolean))];
+          const resolvedDeliveryIds = [...new Set(filteredResolved.map((r: any) => r.delivery_request_id))];
           
           const [{ data: approverProfiles }, { data: resolvedDeliveryReqs }] = await Promise.all([
             approverIds.length > 0
@@ -418,7 +422,7 @@ export function useNotifications() {
             resolvedSoMap[dr.id] = dr.sales_order_headers?.sales_order_number || '';
           });
 
-          resolvedRequests.forEach((req: any) => {
+          filteredResolved.forEach((req: any) => {
             const approverName = approverProfiles?.find((p: any) => p.id === req.approved_by)?.full_name || 'Unknown';
             const isApproved = req.approval_status === 'approved';
             const approvedAt = req.approved_at ? new Date(req.approved_at) : new Date(req.created_at);
@@ -835,6 +839,14 @@ export function useNotifications() {
       if (n.type === 'card_comment' && n.commentIds?.length) {
         n.commentIds.forEach(cid => readCommentIdsRef.current.add(cid));
         saveReadCommentIds(readCommentIdsRef.current);
+      }
+      // Persist urgent request/approval/rejection comment IDs so they auto-disappear
+      if (n.type === 'urgent_request' || n.type === 'urgent_approved' || n.type === 'urgent_rejected') {
+        const cid = n.id.replace(/^urgent_(req|approved|rejected)_/, '');
+        if (cid) {
+          readCommentIdsRef.current.add(cid);
+          saveReadCommentIds(readCommentIdsRef.current);
+        }
       }
       return { ...n, read: true };
     }));

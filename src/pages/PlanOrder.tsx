@@ -1,5 +1,6 @@
 // PlanOrder.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { notifyNewPlanOrder, notifyRevisionRequest } from '@/lib/pushNotifications';
 import {
   Plus,
@@ -983,6 +984,21 @@ export default function PlanOrder() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFormOpen]);
+
+  // Auto-open detail dialog from URL query param ?id=<planOrderId>
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const id = searchParams.get('id');
+    if (!id || planOrders.length === 0) return;
+    const order = planOrders.find((o) => o.id === id);
+    if (order) {
+      handleViewDetail(order);
+      const next = new URLSearchParams(searchParams);
+      next.delete('id');
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, planOrders]);
 
   // ======= UI: Form View =======
   if (isFormOpen) {
