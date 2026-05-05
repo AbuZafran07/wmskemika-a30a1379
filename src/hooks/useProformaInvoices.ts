@@ -36,6 +36,7 @@ export interface ProformaInvoice {
   items?: ProformaInvoiceItem[];
   approved_by_profile?: { full_name: string | null; email: string } | null;
   created_by_profile?: { full_name: string | null; email: string } | null;
+  payment_labels?: string[];
 }
 
 export interface ProformaInvoiceItem {
@@ -144,7 +145,24 @@ export function useProformaInvoiceDetail(id: string | null) {
         createdByProfile = p;
       }
 
-      return { ...data, items: items || [], approved_by_profile: approvedByProfile, created_by_profile: createdByProfile, approver_signature_url: approverSignatureUrl } as ProformaInvoice & { approver_signature_url: string | null };
+      // Fetch payment labels (CBD / DP + Termin) from linked delivery_request
+      let paymentLabels: string[] = [];
+      if (data.delivery_request_id) {
+        const { data: cardLabels } = await supabase
+          .from('delivery_card_labels')
+          .select('label_id')
+          .eq('delivery_request_id', data.delivery_request_id);
+        const labelIds = (cardLabels || []).map((l: any) => l.label_id);
+        if (labelIds.length) {
+          const { data: labels } = await supabase
+            .from('delivery_labels')
+            .select('name')
+            .in('id', labelIds);
+          paymentLabels = (labels || []).map((l: any) => l.name);
+        }
+      }
+
+      return { ...data, items: items || [], approved_by_profile: approvedByProfile, created_by_profile: createdByProfile, approver_signature_url: approverSignatureUrl, payment_labels: paymentLabels } as ProformaInvoice & { approver_signature_url: string | null };
     },
   });
 }
