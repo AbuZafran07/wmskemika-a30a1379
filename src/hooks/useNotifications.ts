@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -45,6 +46,39 @@ function saveReadCommentIds(set: Set<string>) {
   } catch {
     /* ignore */
   }
+}
+
+// Persisted set of acknowledged notification keys (type:refId or type:productId).
+// Used so that opening a deep-linked target page auto-marks the corresponding
+// notification as read across reloads/sessions.
+const READ_NOTIF_KEYS_KEY = 'read_notif_keys_v1';
+const MAX_NOTIF_KEYS = 1000;
+
+function loadReadNotifKeys(): Set<string> {
+  try {
+    const raw = localStorage.getItem(READ_NOTIF_KEYS_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveReadNotifKeys(set: Set<string>) {
+  try {
+    const arr = Array.from(set).slice(-MAX_NOTIF_KEYS);
+    localStorage.setItem(READ_NOTIF_KEYS_KEY, JSON.stringify(arr));
+  } catch {
+    /* ignore */
+  }
+}
+
+// Compose canonical key for a notification.
+function notifKey(n: { type: string; refId?: string; productId?: string }): string | null {
+  const id = n.refId || n.productId;
+  if (!id) return null;
+  return `${n.type}:${id}`;
 }
 
 // Sound notification utility
