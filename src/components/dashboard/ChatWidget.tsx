@@ -993,7 +993,11 @@ export const ChatWidget = ({ onlineUsers = [] }: ChatWidgetProps) => {
                 const groupedReactions = groupReactions(msg.reactions || []);
 
                 return (
-                  <div key={msg.id} className={`flex gap-2 ${isOwnMessage ? "flex-row-reverse" : ""} group`}>
+                  <div
+                    key={msg.id}
+                    id={`msg-${msg.id}`}
+                    className={`flex gap-2 ${isOwnMessage ? "flex-row-reverse" : ""} group transition-colors rounded-lg`}
+                  >
                     {!isOwnMessage && (
                       <Avatar className="h-7 w-7 shrink-0">
                         {msg.sender?.avatar_url && <AvatarImage src={msg.sender.avatar_url} />}
@@ -1011,8 +1015,19 @@ export const ChatWidget = ({ onlineUsers = [] }: ChatWidgetProps) => {
 
                       {/* Reply preview */}
                       {msg.reply_to && (
-                        <div
-                          className={`text-xs bg-muted/50 rounded px-2 py-1 mb-1 border-l-2 border-primary ${isOwnMessage ? "ml-auto" : ""}`}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const el = document.getElementById(`msg-${msg.reply_to!.id}`);
+                            if (el) {
+                              el.scrollIntoView({ behavior: "smooth", block: "center" });
+                              el.classList.add("ring-2", "ring-primary", "bg-primary/10");
+                              setTimeout(() => {
+                                el.classList.remove("ring-2", "ring-primary", "bg-primary/10");
+                              }, 1500);
+                            }
+                          }}
+                          className={`text-xs bg-muted/50 hover:bg-muted rounded px-2 py-1 mb-1 border-l-2 border-primary cursor-pointer text-left w-full ${isOwnMessage ? "ml-auto" : ""}`}
                         >
                           <p className="text-muted-foreground font-medium">
                             {msg.reply_to.sender?.full_name || "User"}
@@ -1021,7 +1036,7 @@ export const ChatWidget = ({ onlineUsers = [] }: ChatWidgetProps) => {
                             {msg.reply_to.message.slice(0, 50)}
                             {msg.reply_to.message.length > 50 ? "..." : ""}
                           </p>
-                        </div>
+                        </button>
                       )}
 
                       <div className="relative">
