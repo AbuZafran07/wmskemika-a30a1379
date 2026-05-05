@@ -47,6 +47,7 @@ export interface PiPdfSummary {
   subTotal: number;
   stampDuty: number;
   downPayment: number;
+  dpPercent?: number;
   balance: number;
 }
 
