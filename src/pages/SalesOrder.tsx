@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { notifyNewSalesOrder, notifyRevisionRequest } from '@/lib/pushNotifications';
 import {
   Plus,
