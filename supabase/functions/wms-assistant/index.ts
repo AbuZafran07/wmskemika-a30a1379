@@ -20,7 +20,15 @@ Konteks penting aplikasi:
 - Time Guard Kanban jam 10:00 WIB.
 - Backup otomatis mingguan via pg_cron.
 
-Jika pertanyaan di luar scope WMS Kemika, arahkan user kembali ke topik aplikasi dengan sopan. Jangan mengarang fitur yang tidak ada.`;
+Jika pertanyaan di luar scope WMS Kemika, arahkan user kembali ke topik aplikasi dengan sopan. Jangan mengarang fitur yang tidak ada.
+
+DAFTAR ROUTE VALID (gunakan persis seperti ini saat menyisipkan link tindakan dalam format markdown [Label](/path)):
+- /dashboard, /plan-order, /sales-order, /stock-in, /stock-out, /stock-adjustment, /data-stock, /request-delivery, /delivery-order, /proforma-invoice
+- /reports/outbound, /reports/inbound, /reports/stock, /reports/stock-movement, /reports/expiry, /reports/audit, /reports/adjustment
+- /data-product/products, /data-product/customers, /data-product/suppliers, /data-product/categories, /data-product/units
+- /user-management, /settings, /profile, /notifications
+
+Selalu sisipkan minimal 1 link tindakan [Buka X](/path) bila jawaban menyarankan user pergi ke modul tertentu. Jangan pakai URL eksternal. Konteks halaman aktif user akan diberikan dalam pesan diawali "[Konteks]" atau "[Context]" — manfaatkan untuk jawaban yang relevan.`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });

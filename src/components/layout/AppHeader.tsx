@@ -175,6 +175,9 @@ export default function AppHeader({ onMenuClick, isMobileDrawerOpen }: AppHeader
 
       {/* Right side */}
       <div className="flex items-center gap-2">
+        {/* WMS Assistant (left of language toggle) */}
+        <WmsAssistant />
+
         {/* Language Toggle */}
         <div className="hidden sm:flex items-center border rounded-lg p-1 bg-muted/50">
           <button
@@ -198,10 +201,6 @@ export default function AppHeader({ onMenuClick, isMobileDrawerOpen }: AppHeader
             ID
           </button>
         </div>
-
-        {/* WMS Assistant */}
-        <WmsAssistant />
-
         {/* Theme Toggle */}
         <Button variant="ghost" size="icon" onClick={toggleTheme}>
           {theme === 'light' ? (
