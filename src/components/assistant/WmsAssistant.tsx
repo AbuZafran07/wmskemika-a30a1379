@@ -668,6 +668,49 @@ export default function WmsAssistant() {
                 )}
               </div>
             )}
+            {(classifying || suggestion) && attachments.length > 0 && (
+              <div className="rounded-md border bg-muted/40 p-2 text-xs space-y-1.5">
+                {classifying && (
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    {language === "en" ? "Detecting issue type..." : "Mendeteksi jenis masalah..."}
+                  </div>
+                )}
+                {!classifying && suggestion && (
+                  <>
+                    <div className="flex items-start gap-1.5">
+                      <ScanSearch className="w-3.5 h-3.5 mt-0.5 text-primary flex-shrink-0" />
+                      <div className="flex-1">
+                        <div className="font-medium text-foreground">
+                          {language === "en" ? "Detected: " : "Terdeteksi: "}
+                          <span className="text-primary">{suggestion.issue_type.replace(/_/g, " ")}</span>
+                        </div>
+                        {suggestion.summary && (
+                          <div className="text-muted-foreground">{suggestion.summary}</div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-muted-foreground">
+                      {language === "en" ? "Pick the closest question:" : "Pilih pertanyaan yang paling sesuai:"}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {suggestion.suggested_questions.map((q, i) => (
+                        <Button
+                          key={i}
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          disabled={isLoading}
+                          onClick={() => send(q)}
+                        >
+                          {q}
+                        </Button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             <div className="flex gap-2">
               <input
                 ref={fileInputRef}
