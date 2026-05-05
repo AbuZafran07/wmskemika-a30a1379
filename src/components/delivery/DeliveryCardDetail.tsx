@@ -1359,6 +1359,10 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
   const [customerPaymentTerms, setCustomerPaymentTerms] = useState<string | null>(null);
   const [customerType, setCustomerType] = useState<string | null>(null);
   const [existingPI, setExistingPI] = useState<string | null>(null);
+  // DP+Termin setup dialog state
+  const [showDpTerminDialog, setShowDpTerminDialog] = useState(false);
+  const [dpPercentInput, setDpPercentInput] = useState<string>("30");
+  const [termDaysInput, setTermDaysInput] = useState<string>("30");
 
   // Fetch customer payment terms and check existing PI
   useEffect(() => {
@@ -1396,7 +1400,7 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
     fetchCustomerInfo();
   }, [card]);
 
-  const handleGeneratePI = async () => {
+  const handleGeneratePI = async (opts?: { dpPercent?: number; termDays?: number; paymentNote?: string }) => {
     if (!card || !user) return;
     setGeneratingPI(true);
     try {
@@ -1469,6 +1473,9 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
           status: 'pending',
           notes: null,
           created_by: user.id,
+          dp_percent: opts?.dpPercent ?? null,
+          term_days: opts?.termDays ?? null,
+          payment_note: opts?.paymentNote ?? null,
         })
         .select('id')
         .single() as any);
@@ -2613,7 +2620,16 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
                 size="sm"
                 variant="outline"
                 className="text-emerald-600 border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
-                onClick={handleGeneratePI}
+                onClick={() => {
+                  if (hasDpTermLabel || isDpTermTerms) {
+                    // open setup dialog first
+                    setDpPercentInput("30");
+                    setTermDaysInput("30");
+                    setShowDpTerminDialog(true);
+                  } else {
+                    handleGeneratePI();
+                  }
+                }}
                 disabled={generatingPI}
               >
                 {generatingPI ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Receipt className="h-4 w-4 mr-1" />}
@@ -2741,6 +2757,76 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
         </DialogContent>
       </Dialog>
     </Dialog>
+
+      {/* DP + Termin Setup Dialog */}
+      <Dialog open={showDpTerminDialog} onOpenChange={setShowDpTerminDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-emerald-600" />
+              Setup DP + Termin
+            </DialogTitle>
+            <DialogDescription>
+              Tentukan persentase Down Payment dan jumlah hari termin sebelum PI dibuat.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="dp-percent">DP (%)</Label>
+                <Input
+                  id="dp-percent"
+                  type="number"
+                  min={1}
+                  max={99}
+                  value={dpPercentInput}
+                  onChange={(e) => setDpPercentInput(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="term-days">Termin (hari)</Label>
+                <Input
+                  id="term-days"
+                  type="number"
+                  min={1}
+                  value={termDaysInput}
+                  onChange={(e) => setTermDaysInput(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2">
+              Note di PDF: <span className="italic">"Sisa pembayaran {termDaysInput || 'N'} hari setelah invoice diterbitkan"</span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDpTerminDialog(false)} disabled={generatingPI}>
+              Batal
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              disabled={generatingPI}
+              onClick={async () => {
+                const dp = parseFloat(dpPercentInput);
+                const days = parseInt(termDaysInput, 10);
+                if (!dp || dp <= 0 || dp >= 100) {
+                  toast.error("DP harus antara 1-99%");
+                  return;
+                }
+                if (!days || days <= 0) {
+                  toast.error("Termin harus minimal 1 hari");
+                  return;
+                }
+                const note = `Sisa pembayaran ${days} hari setelah invoice diterbitkan`;
+                await handleGeneratePI({ dpPercent: dp, termDays: days, paymentNote: note });
+                setShowDpTerminDialog(false);
+              }}
+            >
+              {generatingPI ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+              Generate PI
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Urgent/Cito Reason Dialog */}
       <Dialog open={!!urgentReasonDialog} onOpenChange={() => setUrgentReasonDialog(null)}>

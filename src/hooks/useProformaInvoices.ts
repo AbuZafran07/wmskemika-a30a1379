@@ -30,6 +30,9 @@ export interface ProformaInvoice {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  dp_percent?: number | null;
+  term_days?: number | null;
+  payment_note?: string | null;
   // Joined
   customer?: { name: string; code: string; customer_type: string | null };
   sales_order?: { sales_order_number: string; customer_po_number: string; sales_name: string };
