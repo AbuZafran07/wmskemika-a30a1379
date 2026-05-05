@@ -3,11 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sparkles, Send, Loader2, Trash2, ExternalLink, Lightbulb } from "lucide-react";
+import { Sparkles, Send, Loader2, Trash2, ExternalLink, Lightbulb, Stethoscope, X } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { SearchableSelect, type SearchableSelectOption } from "@/components/ui/searchable-select";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -93,6 +95,99 @@ export default function WmsAssistant() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Diagnostic mode state
+  const [diagOpen, setDiagOpen] = useState(false);
+  const [productOpts, setProductOpts] = useState<SearchableSelectOption[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [selectedProductId, setSelectedProductId] = useState("");
+  const [diagRunning, setDiagRunning] = useState(false);
+
+  useEffect(() => {
+    if (!diagOpen || productOpts.length > 0) return;
+    setProductsLoading(true);
+    supabase
+      .from("products")
+      .select("id, name, sku")
+      .is("deleted_at", null)
+      .eq("is_active", true)
+      .order("name")
+      .limit(1000)
+      .then(({ data }) => {
+        setProductOpts(
+          (data || []).map((p: any) => ({
+            value: p.id,
+            label: p.name,
+            description: p.sku || undefined,
+          }))
+        );
+        setProductsLoading(false);
+      });
+  }, [diagOpen, productOpts.length]);
+
+  const runDiagnostic = async () => {
+    if (!selectedProductId || diagRunning) return;
+    setDiagRunning(true);
+    try {
+      const product = productOpts.find((p) => p.value === selectedProductId);
+      // 1. Batches
+      const { data: batches } = await supabase
+        .from("inventory_batches")
+        .select("id, batch_no, qty_on_hand, expired_date")
+        .eq("product_id", selectedProductId)
+        .order("expired_date", { ascending: true, nullsFirst: false });
+
+      // 2. Active bookings (stock_out_items joined to headers booking_status='booked')
+      const { data: bookedItems } = await supabase
+        .from("stock_out_items")
+        .select(
+          "qty_out, batch_id, stock_out_id, stock_out_headers!inner(stock_out_number, booking_status, sales_order_id, sales_order_headers(sales_order_number, customer_id, customers(name)))"
+        )
+        .eq("product_id", selectedProductId)
+        .eq("stock_out_headers.booking_status", "booked");
+
+      const totalOnHand = (batches || []).reduce((s, b: any) => s + (b.qty_on_hand || 0), 0);
+      const totalBooked = (bookedItems || []).reduce((s, it: any) => s + (it.qty_out || 0), 0);
+      const available = totalOnHand - totalBooked;
+
+      // Build context payload for AI
+      const summary = {
+        product: product?.label,
+        sku: product?.description,
+        on_hand: totalOnHand,
+        booked: totalBooked,
+        available,
+        batches: (batches || []).map((b: any) => ({
+          batch_no: b.batch_no,
+          qty: b.qty_on_hand,
+          expired_date: b.expired_date,
+        })),
+        active_bookings: (bookedItems || []).map((it: any) => ({
+          stock_out_no: it.stock_out_headers?.stock_out_number,
+          sales_order_no: it.stock_out_headers?.sales_order_headers?.sales_order_number,
+          customer: it.stock_out_headers?.sales_order_headers?.customers?.name,
+          qty: it.qty_out,
+        })),
+      };
+
+      const promptText =
+        (language === "en"
+          ? `Run DIAGNOSTIC for product "${product?.label}". Explain step by step why Available is ${available} (On Hand=${totalOnHand}, Booked=${totalBooked}). Reference each batch and active booking. Suggest concrete actions with module links if needed. Use bullet points and a clear numbered explanation.`
+          : `Jalankan DIAGNOSTIK untuk produk "${product?.label}". Jelaskan langkah demi langkah kenapa Available = ${available} (On Hand=${totalOnHand}, Booked=${totalBooked}). Sebutkan tiap batch dan booking aktif yang relevan. Beri saran tindakan konkret beserta link modul bila perlu. Gunakan bullet dan penjelasan bernomor yang jelas.`) +
+        `\n\n[DATA]\n` +
+        "```json\n" +
+        JSON.stringify(summary, null, 2) +
+        "\n```";
+
+      setDiagOpen(false);
+      await send(promptText);
+    } catch (e) {
+      console.error(e);
+      toast.error(language === "en" ? "Diagnostic failed" : "Diagnostik gagal");
+    } finally {
+      setDiagRunning(false);
+    }
+  };
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -291,10 +386,62 @@ export default function WmsAssistant() {
 
           {/* Quick prompts */}
           <div className="border-t px-3 py-2 flex-shrink-0 bg-muted/20">
-            <div className="flex items-center gap-1.5 mb-1.5 text-xs text-muted-foreground">
-              <Lightbulb className="w-3.5 h-3.5" />
-              {language === "en" ? "Quick help" : "Bantuan cepat"}
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Lightbulb className="w-3.5 h-3.5" />
+                {language === "en" ? "Quick help" : "Bantuan cepat"}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs gap-1"
+                onClick={() => setDiagOpen((v) => !v)}
+                disabled={isLoading}
+              >
+                <Stethoscope className="w-3.5 h-3.5" />
+                {language === "en" ? "Diagnose stock" : "Diagnostik stok"}
+              </Button>
             </div>
+            {diagOpen && (
+              <div className="mb-2 rounded-md border bg-background p-2 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium">
+                    {language === "en"
+                      ? "Diagnose: On Hand vs Booked vs Available"
+                      : "Diagnostik: On Hand vs Booked vs Available"}
+                  </span>
+                  <Button variant="ghost" size="iconSm" onClick={() => setDiagOpen(false)}>
+                    <X className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+                <SearchableSelect
+                  options={productOpts}
+                  value={selectedProductId}
+                  onValueChange={setSelectedProductId}
+                  placeholder={
+                    productsLoading
+                      ? language === "en" ? "Loading products..." : "Memuat produk..."
+                      : language === "en" ? "Select product" : "Pilih produk"
+                  }
+                  searchPlaceholder={language === "en" ? "Search product..." : "Cari produk..."}
+                  emptyMessage={language === "en" ? "No products" : "Tidak ada produk"}
+                  disabled={productsLoading}
+                />
+                <Button
+                  size="sm"
+                  className="w-full h-8 text-xs gap-1"
+                  disabled={!selectedProductId || diagRunning}
+                  onClick={runDiagnostic}
+                >
+                  {diagRunning ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Stethoscope className="w-3.5 h-3.5" />
+                  )}
+                  {language === "en" ? "Run diagnostic" : "Jalankan diagnostik"}
+                </Button>
+              </div>
+            )}
             <div className="flex flex-wrap gap-1.5">
               {quickPrompts.map((q, i) => (
                 <Button
