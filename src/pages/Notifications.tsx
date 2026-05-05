@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, AlertTriangle, Calendar, Package, CheckCircle, FileText, ClipboardList, Volume2, VolumeX, Filter, RefreshCw, BellRing, BellOff } from 'lucide-react';
+import { Bell, AlertTriangle, Calendar, Package, CheckCircle, FileText, ClipboardList, Volume2, VolumeX, Filter, RefreshCw, BellRing, BellOff, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -64,6 +64,8 @@ export default function Notifications() {
         return <CheckCircle className="w-5 h-5 text-success" />;
       case 'urgent_rejected':
         return <AlertTriangle className="w-5 h-5 text-destructive" />;
+      case 'card_comment':
+        return <MessageSquare className="w-5 h-5 text-info" />;
       default:
         return <Bell className="w-5 h-5 text-info" />;
     }
@@ -81,6 +83,7 @@ export default function Notifications() {
       urgent_request: { variant: 'destructive', label: 'Urgent/Cito' },
       urgent_approved: { variant: 'secondary', label: 'Urgent Disetujui' },
       urgent_rejected: { variant: 'destructive', label: 'Urgent Ditolak' },
+      card_comment: { variant: 'secondary', label: language === 'en' ? 'Comment' : 'Komentar' },
       info: { variant: 'secondary', label: 'Info' },
     };
     const config = variants[type] || variants.info;
