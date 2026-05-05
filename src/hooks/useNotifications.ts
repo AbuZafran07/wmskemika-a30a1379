@@ -836,6 +836,14 @@ export function useNotifications() {
         n.commentIds.forEach(cid => readCommentIdsRef.current.add(cid));
         saveReadCommentIds(readCommentIdsRef.current);
       }
+      // Persist urgent request/approval/rejection comment IDs so they auto-disappear
+      if (n.type === 'urgent_request' || n.type === 'urgent_approved' || n.type === 'urgent_rejected') {
+        const cid = n.id.replace(/^urgent_(req|approved|rejected)_/, '');
+        if (cid) {
+          readCommentIdsRef.current.add(cid);
+          saveReadCommentIds(readCommentIdsRef.current);
+        }
+      }
       return { ...n, read: true };
     }));
     setUnreadCount(prev => {
