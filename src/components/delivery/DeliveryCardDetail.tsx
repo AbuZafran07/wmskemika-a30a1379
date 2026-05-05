@@ -2758,6 +2758,76 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
       </Dialog>
     </Dialog>
 
+      {/* DP + Termin Setup Dialog */}
+      <Dialog open={showDpTerminDialog} onOpenChange={setShowDpTerminDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-emerald-600" />
+              Setup DP + Termin
+            </DialogTitle>
+            <DialogDescription>
+              Tentukan persentase Down Payment dan jumlah hari termin sebelum PI dibuat.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="dp-percent">DP (%)</Label>
+                <Input
+                  id="dp-percent"
+                  type="number"
+                  min={1}
+                  max={99}
+                  value={dpPercentInput}
+                  onChange={(e) => setDpPercentInput(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="term-days">Termin (hari)</Label>
+                <Input
+                  id="term-days"
+                  type="number"
+                  min={1}
+                  value={termDaysInput}
+                  onChange={(e) => setTermDaysInput(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2">
+              Note di PDF: <span className="italic">"Sisa pembayaran {termDaysInput || 'N'} hari setelah invoice diterbitkan"</span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDpTerminDialog(false)} disabled={generatingPI}>
+              Batal
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              disabled={generatingPI}
+              onClick={async () => {
+                const dp = parseFloat(dpPercentInput);
+                const days = parseInt(termDaysInput, 10);
+                if (!dp || dp <= 0 || dp >= 100) {
+                  toast.error("DP harus antara 1-99%");
+                  return;
+                }
+                if (!days || days <= 0) {
+                  toast.error("Termin harus minimal 1 hari");
+                  return;
+                }
+                const note = `Sisa pembayaran ${days} hari setelah invoice diterbitkan`;
+                await handleGeneratePI({ dpPercent: dp, termDays: days, paymentNote: note });
+                setShowDpTerminDialog(false);
+              }}
+            >
+              {generatingPI ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+              Generate PI
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Urgent/Cito Reason Dialog */}
       <Dialog open={!!urgentReasonDialog} onOpenChange={() => setUrgentReasonDialog(null)}>
         <DialogContent className="max-w-sm">
