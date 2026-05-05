@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sparkles, Send, Loader2, Trash2, ExternalLink, Lightbulb, Stethoscope, X } from "lucide-react";
+import { Sparkles, Send, Loader2, Trash2, ExternalLink, Lightbulb, Stethoscope, X, Paperclip, ImageIcon } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -11,9 +11,41 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { SearchableSelect, type SearchableSelectOption } from "@/components/ui/searchable-select";
 
-type Msg = { role: "user" | "assistant"; content: string };
+type Attachment = { dataUrl: string; size: number };
+type Msg = {
+  role: "user" | "assistant";
+  content: string;
+  images?: string[]; // data URLs (webp) for display + sending
+};
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/wms-assistant`;
+
+const MAX_IMAGES_PER_MESSAGE = 4;
+const MAX_IMAGE_DIMENSION = 1920;
+
+// Compress an image File/Blob to WebP, max 1920px on the longest side.
+async function compressToWebp(file: File | Blob): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  let { width, height } = bitmap;
+  if (width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
+    const ratio = Math.min(MAX_IMAGE_DIMENSION / width, MAX_IMAGE_DIMENSION / height);
+    width = Math.round(width * ratio);
+    height = Math.round(height * ratio);
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("canvas ctx");
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close?.();
+  // Try webp; fall back to jpeg if browser cannot encode webp
+  let dataUrl = canvas.toDataURL("image/webp", 0.85);
+  if (!dataUrl.startsWith("data:image/webp")) {
+    dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+  }
+  return dataUrl;
+}
 
 const ROUTE_LABELS: Record<string, string> = {
   "/dashboard": "Dashboard",
