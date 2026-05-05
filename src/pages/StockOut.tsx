@@ -424,6 +424,31 @@ export default function StockOut() {
             });
 
             if (hasRemaining) {
+              // Auto-attach "Partial Delivery" label to current card (the partial shipment)
+              try {
+                const { data: partialLabel } = await supabase
+                  .from("delivery_labels")
+                  .select("id")
+                  .ilike("name", "Partial Delivery")
+                  .maybeSingle();
+                if (partialLabel?.id) {
+                  const { data: existing } = await supabase
+                    .from("delivery_card_labels")
+                    .select("id")
+                    .eq("delivery_request_id", deliveryCard.id)
+                    .eq("label_id", partialLabel.id)
+                    .maybeSingle();
+                  if (!existing) {
+                    await supabase.from("delivery_card_labels").insert({
+                      delivery_request_id: deliveryCard.id,
+                      label_id: partialLabel.id,
+                    });
+                  }
+                }
+              } catch (labelErr) {
+                console.error("Failed to auto-attach Partial Delivery label:", labelErr);
+              }
+
               // Create new card in checking for remaining items (ready for next stock out)
               const { data: newCard, error: newCardError } = await supabase
                 .from("delivery_requests")
