@@ -25,6 +25,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import logoImage from '@/assets/logo.png';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import WmsAssistant from '@/components/assistant/WmsAssistant';
 
 interface AppHeaderProps {
   onMenuClick: () => void;
@@ -197,6 +198,9 @@ export default function AppHeader({ onMenuClick, isMobileDrawerOpen }: AppHeader
             ID
           </button>
         </div>
+
+        {/* WMS Assistant */}
+        <WmsAssistant />
 
         {/* Theme Toggle */}
         <Button variant="ghost" size="icon" onClick={toggleTheme}>
