@@ -172,6 +172,9 @@ export function useNotifications() {
   const cardSoMapRef = useRef<Record<string, string>>({});
   // Persisted read state for card comments
   const readCommentIdsRef = useRef<Set<string>>(loadReadCommentIds());
+  // Persisted read state for any notification keyed by type+refId/productId
+  const readNotifKeysRef = useRef<Set<string>>(loadReadNotifKeys());
+  const location = useLocation();
 
   const toggleSound = useCallback((enabled: boolean) => {
     setSoundEnabled(enabled);
@@ -637,8 +640,16 @@ export function useNotifications() {
       }
       
       previousNotifIds.current = currentIds;
-      setNotifications(notifs);
-      const newUnreadCount = notifs.filter(n => !n.read).length;
+      // Apply persisted "auto-read" keys (type:refId / type:productId) so that
+      // notifications for records the user has already opened stay marked read.
+      const readKeys = readNotifKeysRef.current;
+      const finalNotifs = notifs.map(n => {
+        const key = notifKey(n);
+        if (key && readKeys.has(key)) return { ...n, read: true };
+        return n;
+      });
+      setNotifications(finalNotifs);
+      const newUnreadCount = finalNotifs.filter(n => !n.read).length;
       setUnreadCount(newUnreadCount);
       setBadgeCount(newUnreadCount);
     } catch (error) {
