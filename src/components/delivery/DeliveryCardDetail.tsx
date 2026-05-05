@@ -2591,17 +2591,24 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
               <Trash2 className="h-4 w-4 mr-1" /> Hapus Card
             </Button>
           )}
-          {/* Generate PI button - CBD payment terms OR CBD label, sales/super_admin/finance */}
+          {/* Generate PI button - CBD / DP+Termin payment terms OR matching label, sales/super_admin/finance */}
           {(() => {
-            const isCBDTerms = customerPaymentTerms?.toUpperCase() === 'CBD';
+            const termsUpper = customerPaymentTerms?.toUpperCase() || '';
+            const isCBDTerms = termsUpper === 'CBD';
+            const isDpTermTerms = termsUpper.includes('DP') && (termsUpper.includes('TERMIN') || termsUpper.includes('TOP') || /\d+\s*HARI/.test(termsUpper));
             const hasCBDLabel = allLabels.some(l => {
               const n = l.name.toUpperCase();
               const isCBDName = n === 'CBD' || n.includes('CBD') || n.includes('CASH BEFORE DELIVERY');
               return isCBDName && cardLabelIds.includes(l.id);
             });
-            const isCBD = isCBDTerms || hasCBDLabel;
+            const hasDpTermLabel = allLabels.some(l => {
+              const n = l.name.toUpperCase();
+              const isDpName = n.includes('DP') && (n.includes('TERMIN') || n.includes('TOP'));
+              return isDpName && cardLabelIds.includes(l.id);
+            });
+            const eligible = isCBDTerms || isDpTermTerms || hasCBDLabel || hasDpTermLabel;
             const canGenerate = user?.role === 'sales' || user?.role === 'super_admin' || user?.role === 'finance';
-            return isCBD && canGenerate && !existingPI ? (
+            return eligible && canGenerate && !existingPI ? (
               <Button
                 size="sm"
                 variant="outline"
