@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -45,6 +46,39 @@ function saveReadCommentIds(set: Set<string>) {
   } catch {
     /* ignore */
   }
+}
+
+// Persisted set of acknowledged notification keys (type:refId or type:productId).
+// Used so that opening a deep-linked target page auto-marks the corresponding
+// notification as read across reloads/sessions.
+const READ_NOTIF_KEYS_KEY = 'read_notif_keys_v1';
+const MAX_NOTIF_KEYS = 1000;
+
+function loadReadNotifKeys(): Set<string> {
+  try {
+    const raw = localStorage.getItem(READ_NOTIF_KEYS_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveReadNotifKeys(set: Set<string>) {
+  try {
+    const arr = Array.from(set).slice(-MAX_NOTIF_KEYS);
+    localStorage.setItem(READ_NOTIF_KEYS_KEY, JSON.stringify(arr));
+  } catch {
+    /* ignore */
+  }
+}
+
+// Compose canonical key for a notification.
+function notifKey(n: { type: string; refId?: string; productId?: string }): string | null {
+  const id = n.refId || n.productId;
+  if (!id) return null;
+  return `${n.type}:${id}`;
 }
 
 // Sound notification utility
@@ -138,6 +172,9 @@ export function useNotifications() {
   const cardSoMapRef = useRef<Record<string, string>>({});
   // Persisted read state for card comments
   const readCommentIdsRef = useRef<Set<string>>(loadReadCommentIds());
+  // Persisted read state for any notification keyed by type+refId/productId
+  const readNotifKeysRef = useRef<Set<string>>(loadReadNotifKeys());
+  const location = useLocation();
 
   const toggleSound = useCallback((enabled: boolean) => {
     setSoundEnabled(enabled);
@@ -603,8 +640,16 @@ export function useNotifications() {
       }
       
       previousNotifIds.current = currentIds;
-      setNotifications(notifs);
-      const newUnreadCount = notifs.filter(n => !n.read).length;
+      // Apply persisted "auto-read" keys (type:refId / type:productId) so that
+      // notifications for records the user has already opened stay marked read.
+      const readKeys = readNotifKeysRef.current;
+      const finalNotifs = notifs.map(n => {
+        const key = notifKey(n);
+        if (key && readKeys.has(key)) return { ...n, read: true };
+        return n;
+      });
+      setNotifications(finalNotifs);
+      const newUnreadCount = finalNotifs.filter(n => !n.read).length;
       setUnreadCount(newUnreadCount);
       setBadgeCount(newUnreadCount);
     } catch (error) {
@@ -851,6 +896,91 @@ export function useNotifications() {
     };
   }, [fetchNotifications]);
 
+  // Auto-acknowledge: when the user opens a deep-linked target page
+  // (?type=&id= or legacy ?card= / ?id= / ?productId=), mark all matching
+  // notifications for that record as read automatically.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const explicitType = params.get('type') || '';
+    const explicitId = params.get('id') || '';
+    const cardId = params.get('card') || '';
+    const productId = params.get('productId') || '';
+
+    // Build candidate (type, id) pairs to acknowledge.
+    // If `type` param is present, trust it. Otherwise infer from pathname.
+    const candidates: Array<{ type: string; id: string }> = [];
+    if (explicitType && explicitId) {
+      candidates.push({ type: explicitType, id: explicitId });
+    }
+
+    const path = location.pathname;
+    const matchAny = (id: string) => {
+      if (!id) return;
+      if (path.startsWith('/request-delivery')) {
+        ['urgent_request', 'urgent_approved', 'urgent_rejected', 'card_comment'].forEach(t =>
+          candidates.push({ type: t, id })
+        );
+      } else if (path.startsWith('/plan-order') || path.startsWith('/sales-order') || path.startsWith('/stock-adjustment') || path.startsWith('/stock-in') || path.startsWith('/stock-out')) {
+        ['approval_pending', 'revision_requested', 'approved', 'cancelled', 'new_order'].forEach(t =>
+          candidates.push({ type: t, id })
+        );
+      } else if (path.startsWith('/data-stock')) {
+        candidates.push({ type: 'low_stock', id });
+      } else if (path.startsWith('/reports/expiry')) {
+        ['expiring_soon', 'expired'].forEach(t => candidates.push({ type: t, id }));
+      }
+    };
+    matchAny(cardId || explicitId);
+    matchAny(productId || explicitId);
+
+    if (candidates.length === 0) return;
+
+    let changed = false;
+    candidates.forEach(c => {
+      const key = `${c.type}:${c.id}`;
+      if (!readNotifKeysRef.current.has(key)) {
+        readNotifKeysRef.current.add(key);
+        changed = true;
+      }
+    });
+    if (changed) saveReadNotifKeys(readNotifKeysRef.current);
+
+    // Apply immediately to in-memory state and recompute counts.
+    setNotifications(prev => {
+      let touched = 0;
+      const next = prev.map(n => {
+        if (n.read) return n;
+        const key = notifKey(n);
+        if (key && readNotifKeysRef.current.has(key)) {
+          touched++;
+          // Persist underlying comment ids for card_comment / urgent so realtime
+          // refetch won't re-surface them.
+          if (n.type === 'card_comment' && n.commentIds?.length) {
+            n.commentIds.forEach(cid => readCommentIdsRef.current.add(cid));
+            saveReadCommentIds(readCommentIdsRef.current);
+          }
+          if (n.type === 'urgent_request' || n.type === 'urgent_approved' || n.type === 'urgent_rejected') {
+            const cid = n.id.replace(/^urgent_(req|approved|rejected)_/, '');
+            if (cid) {
+              readCommentIdsRef.current.add(cid);
+              saveReadCommentIds(readCommentIdsRef.current);
+            }
+          }
+          return { ...n, read: true };
+        }
+        return n;
+      });
+      if (touched > 0) {
+        setUnreadCount(c => {
+          const nc = Math.max(0, c - touched);
+          setBadgeCount(nc);
+          return nc;
+        });
+      }
+      return next;
+    });
+  }, [location.pathname, location.search]);
+
   const markAsRead = (id: string) => {
     setNotifications(prev => prev.map(n => {
       if (n.id !== id) return n;
@@ -867,6 +997,12 @@ export function useNotifications() {
           saveReadCommentIds(readCommentIdsRef.current);
         }
       }
+      // Persist canonical key so the same notification stays read across refetches
+      const key = notifKey(n);
+      if (key) {
+        readNotifKeysRef.current.add(key);
+        saveReadNotifKeys(readNotifKeysRef.current);
+      }
       return { ...n, read: true };
     }));
     setUnreadCount(prev => {
@@ -882,8 +1018,11 @@ export function useNotifications() {
         if (n.type === 'card_comment' && n.commentIds?.length) {
           n.commentIds.forEach(cid => readCommentIdsRef.current.add(cid));
         }
+        const key = notifKey(n);
+        if (key) readNotifKeysRef.current.add(key);
       });
       saveReadCommentIds(readCommentIdsRef.current);
+      saveReadNotifKeys(readNotifKeysRef.current);
       return prev.map(n => ({ ...n, read: true }));
     });
     setUnreadCount(0);
