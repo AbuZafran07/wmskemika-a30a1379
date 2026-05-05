@@ -47,6 +47,7 @@ export interface PiPdfSummary {
   subTotal: number;
   stampDuty: number;
   downPayment: number;
+  dpPercent?: number;
   balance: number;
 }
 
@@ -533,9 +534,11 @@ const PiPdfTemplateCompact = React.forwardRef<HTMLDivElement, PiPdfTemplateProps
                     alignItems: 'baseline',
                   }}
                 >
-                  <div>Down Payment</div>
-                  <div style={{ textAlign: 'center' }}>:</div>
-                  <div style={{ minWidth: '29mm', textAlign: 'right' }}>
+                  <div style={{ fontSize: '3.7mm', fontWeight: 700, color: TEXT }}>
+                    Down Payment{summary.dpPercent && summary.dpPercent > 0 ? ` (${summary.dpPercent}%)` : ''}
+                  </div>
+                  <div style={{ fontSize: '3.7mm', fontWeight: 700, color: TEXT, textAlign: 'center' }}>:</div>
+                  <div style={{ fontSize: '3.7mm', fontWeight: 700, color: TEXT, minWidth: '29mm', textAlign: 'right' }}>
                     {summary.downPayment > 0 ? `Rp ${fmt(summary.downPayment)}` : '-'}
                   </div>
                 </div>
