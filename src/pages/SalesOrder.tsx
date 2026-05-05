@@ -994,6 +994,21 @@ export default function SalesOrder() {
     }
   };
 
+  // Auto-open detail dialog from URL query param ?id=<salesOrderId>
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const id = searchParams.get('id');
+    if (!id || salesOrders.length === 0) return;
+    const order = salesOrders.find((o) => o.id === id);
+    if (order) {
+      handleViewDetail(order);
+      const next = new URLSearchParams(searchParams);
+      next.delete('id');
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, salesOrders]);
+
   // === PDF ===
   const handlePreviewPDF = () => {
     if (!selectedOrder) return;
