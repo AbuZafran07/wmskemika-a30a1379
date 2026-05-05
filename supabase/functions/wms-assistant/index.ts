@@ -45,6 +45,27 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Normalize messages: allow content to be string OR array of parts
+    // [{type:"text", text:"..."}, {type:"image_url", image_url:{url:"data:image/webp;base64,..."}}]
+    const normalized = messages.map((m: any) => {
+      if (typeof m?.content === "string") return { role: m.role, content: m.content };
+      if (Array.isArray(m?.content)) {
+        const parts = m.content
+          .map((p: any) => {
+            if (p?.type === "text" && typeof p.text === "string") {
+              return { type: "text", text: p.text };
+            }
+            if (p?.type === "image_url" && p?.image_url?.url) {
+              return { type: "image_url", image_url: { url: String(p.image_url.url) } };
+            }
+            return null;
+          })
+          .filter(Boolean);
+        return { role: m.role, content: parts };
+      }
+      return { role: m.role, content: String(m?.content ?? "") };
+    });
+
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -53,7 +74,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
-        messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
+        messages: [{ role: "system", content: SYSTEM_PROMPT }, ...normalized],
         stream: true,
       }),
     });
