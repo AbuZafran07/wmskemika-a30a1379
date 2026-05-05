@@ -99,7 +99,7 @@ interface PiPdfTemplateProps {
 }
 
 const PiPdfTemplateCompact = React.forwardRef<HTMLDivElement, PiPdfTemplateProps>(({ data }, ref) => {
-  const { company, invoice, customer, items, summary, signatory } = data;
+  const { company, invoice, customer, items, summary, signatory, paymentScheme } = data;
 
   const infoLabel: React.CSSProperties = {
     width: '20mm',
