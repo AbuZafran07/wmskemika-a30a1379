@@ -1359,6 +1359,10 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
   const [customerPaymentTerms, setCustomerPaymentTerms] = useState<string | null>(null);
   const [customerType, setCustomerType] = useState<string | null>(null);
   const [existingPI, setExistingPI] = useState<string | null>(null);
+  // DP+Termin setup dialog state
+  const [showDpTerminDialog, setShowDpTerminDialog] = useState(false);
+  const [dpPercentInput, setDpPercentInput] = useState<string>("30");
+  const [termDaysInput, setTermDaysInput] = useState<string>("30");
 
   // Fetch customer payment terms and check existing PI
   useEffect(() => {
@@ -1396,7 +1400,7 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
     fetchCustomerInfo();
   }, [card]);
 
-  const handleGeneratePI = async () => {
+  const handleGeneratePI = async (opts?: { dpPercent?: number; termDays?: number; paymentNote?: string }) => {
     if (!card || !user) return;
     setGeneratingPI(true);
     try {
@@ -1469,6 +1473,9 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
           status: 'pending',
           notes: null,
           created_by: user.id,
+          dp_percent: opts?.dpPercent ?? null,
+          term_days: opts?.termDays ?? null,
+          payment_note: opts?.paymentNote ?? null,
         })
         .select('id')
         .single() as any);
