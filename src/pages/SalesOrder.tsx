@@ -221,6 +221,15 @@ export default function SalesOrder() {
   const [stockOutHistory, setStockOutHistory] = useState<any[]>([]);
   const [stockOutHistoryLoading, setStockOutHistoryLoading] = useState(false);
 
+  // Proforma Invoice (DP + Termin) info for the selected order
+  const [piDpInfo, setPiDpInfo] = useState<{
+    pi_number: string;
+    dp_percent: number;
+    term_days: number | null;
+    payment_note: string | null;
+    grand_total: number;
+  } | null>(null);
+
   // === Form state ===
   const [soNumber, setSoNumber] = useState("");
   const [orderDate, setOrderDate] = useState(new Date().toISOString().split("T")[0]);
@@ -911,6 +920,30 @@ export default function SalesOrder() {
     setIsDetailDialogOpen(true);
     setRevisionReasonDisplay(null);
     setApproveReasonDisplay(null);
+    setPiDpInfo(null);
+
+    // Fetch PI with DP + Termin info (if exists) for this SO
+    try {
+      const { data: piData } = await supabase
+        .from('proforma_invoices')
+        .select('pi_number, dp_percent, term_days, payment_note, grand_total')
+        .eq('sales_order_id', order.id)
+        .not('dp_percent', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (piData && piData.length > 0) {
+        const pi = piData[0] as any;
+        setPiDpInfo({
+          pi_number: pi.pi_number,
+          dp_percent: Number(pi.dp_percent) || 0,
+          term_days: pi.term_days,
+          payment_note: pi.payment_note,
+          grand_total: Number(pi.grand_total) || 0,
+        });
+      }
+    } catch (err) {
+      console.error('Failed to fetch PI DP info:', err);
+    }
 
     // Fetch approve reason if status is approved or beyond
     if (['approved', 'partially_delivered', 'delivered', 'fulfilled'].includes(order.status)) {
@@ -2041,6 +2074,38 @@ export default function SalesOrder() {
                   </div>
                 </div>
               )}
+
+              {/* DP + Termin Payment Breakdown (read-only, from PI) */}
+              {piDpInfo && (() => {
+                const dpAmount = (piDpInfo.grand_total * piDpInfo.dp_percent) / 100;
+                const remaining = piDpInfo.grand_total - dpAmount;
+                return (
+                  <div className="rounded-lg border border-primary/40 bg-primary/5 p-4 space-y-2">
+                    <div className="flex items-center gap-2 text-primary font-semibold">
+                      <FileText className="w-4 h-4" />
+                      {language === "en" ? "Down Payment & Term" : "Down Payment & Termin"}
+                      <span className="text-xs font-normal text-muted-foreground">
+                        ({language === "en" ? "from PI" : "dari PI"} {piDpInfo.pi_number})
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <p className="text-muted-foreground">DP ({piDpInfo.dp_percent}%)</p>
+                        <p className="font-semibold">{formatCurrency(dpAmount)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">{language === "en" ? "Remaining Balance" : "Sisa Pembayaran"}</p>
+                        <p className="font-semibold">{formatCurrency(remaining)}</p>
+                      </div>
+                    </div>
+                    {piDpInfo.payment_note && (
+                      <p className="text-xs text-muted-foreground pt-1 border-t border-primary/20">
+                        {piDpInfo.payment_note}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div>
                 <h4 className="font-semibold mb-3">{language === "en" ? "Order Items" : "Item Pesanan"}</h4>
