@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { setBadgeCount } from '@/lib/badgeUtils';
+import { buildNotificationDeepLink } from '@/lib/notificationDeepLink';
 
 export interface Notification {
   id: string;
@@ -724,7 +725,16 @@ export function useNotifications() {
             const toastAction = {
               label: '📋 Lihat Kartu',
               onClick: () => {
-                window.location.href = `/request-delivery?card=${deliveryRequestId}`;
+                window.location.href = buildNotificationDeepLink({
+                  id: '',
+                  type: updated.approval_status === 'approved' ? 'urgent_approved' : 'urgent_rejected',
+                  title: '',
+                  message: '',
+                  module: 'delivery',
+                  refId: deliveryRequestId,
+                  createdAt: new Date(),
+                  read: false,
+                });
               },
             };
 
@@ -805,7 +815,16 @@ export function useNotifications() {
                   // Mark this comment as acknowledged so it won't show in bell list
                   readCommentIdsRef.current.add(inserted.id);
                   saveReadCommentIds(readCommentIdsRef.current);
-                  window.location.href = `/request-delivery?card=${inserted.delivery_request_id}`;
+                  window.location.href = buildNotificationDeepLink({
+                    id: '',
+                    type: 'card_comment',
+                    title: '',
+                    message: '',
+                    module: 'delivery',
+                    refId: inserted.delivery_request_id,
+                    createdAt: new Date(),
+                    read: false,
+                  });
                 },
               },
             });

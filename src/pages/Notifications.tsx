@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { id as idLocale, enUS } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { buildNotificationDeepLink } from '@/lib/notificationDeepLink';
 
 export default function Notifications() {
   const navigate = useNavigate();
@@ -114,25 +115,7 @@ export default function Notifications() {
 
   const handleNotificationClick = (notif: NotificationType) => {
     markAsRead(notif.id);
-    if (notif.type === 'low_stock') {
-      navigate(notif.productId ? `/data-stock?productId=${notif.productId}` : '/data-stock');
-    } else if (notif.type === 'expiring_soon' || notif.type === 'expired') {
-      navigate(notif.productId ? `/reports/expiry?productId=${notif.productId}` : '/reports/expiry');
-    } else if (notif.module === 'plan_order') {
-      navigate(notif.refId ? `/plan-order?id=${notif.refId}` : '/plan-order');
-    } else if (notif.module === 'sales_order') {
-      navigate(notif.refId ? `/sales-order?id=${notif.refId}` : '/sales-order');
-    } else if (notif.module === 'stock_adjustment') {
-      navigate(notif.refId ? `/stock-adjustment?id=${notif.refId}` : '/stock-adjustment');
-    } else if (notif.module === 'stock_in') {
-      navigate(notif.refId ? `/stock-in?id=${notif.refId}` : '/stock-in');
-    } else if (notif.module === 'stock_out') {
-      navigate(notif.refId ? `/stock-out?id=${notif.refId}` : '/stock-out');
-    } else if (notif.module === 'delivery' && notif.refId) {
-      navigate(`/request-delivery?card=${notif.refId}`);
-    } else if (notif.module === 'delivery') {
-      navigate('/request-delivery');
-    }
+    navigate(buildNotificationDeepLink(notif));
   };
 
   const filteredNotifications = notifications.filter(notif => {
