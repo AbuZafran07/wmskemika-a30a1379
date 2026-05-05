@@ -2620,7 +2620,16 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
                 size="sm"
                 variant="outline"
                 className="text-emerald-600 border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
-                onClick={handleGeneratePI}
+                onClick={() => {
+                  if (hasDpTermLabel || isDpTermTerms) {
+                    // open setup dialog first
+                    setDpPercentInput("30");
+                    setTermDaysInput("30");
+                    setShowDpTerminDialog(true);
+                  } else {
+                    handleGeneratePI();
+                  }
+                }}
                 disabled={generatingPI}
               >
                 {generatingPI ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Receipt className="h-4 w-4 mr-1" />}
