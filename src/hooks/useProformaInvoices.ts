@@ -36,6 +36,7 @@ export interface ProformaInvoice {
   items?: ProformaInvoiceItem[];
   approved_by_profile?: { full_name: string | null; email: string } | null;
   created_by_profile?: { full_name: string | null; email: string } | null;
+  payment_labels?: string[];
 }
 
 export interface ProformaInvoiceItem {
