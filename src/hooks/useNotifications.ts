@@ -6,8 +6,7 @@ import { setBadgeCount } from '@/lib/badgeUtils';
 
 export interface Notification {
   id: string;
-  type: 'low_stock' | 'expiring_soon' | 'expired' | 'info' | 'approval_pending' | 'approved' | 'cancelled' | 'new_order' | 'revision_requested' | 'urgent_request' | 'urgent_approved' | 'urgent_rejected';
-  // Note: 'card_comment' added below as a new notification type
+  type: 'low_stock' | 'expiring_soon' | 'expired' | 'info' | 'approval_pending' | 'approved' | 'cancelled' | 'new_order' | 'revision_requested' | 'urgent_request' | 'urgent_approved' | 'urgent_rejected' | 'card_comment';
   title: string;
   message: string;
   productId?: string;
