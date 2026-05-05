@@ -920,6 +920,30 @@ export default function SalesOrder() {
     setIsDetailDialogOpen(true);
     setRevisionReasonDisplay(null);
     setApproveReasonDisplay(null);
+    setPiDpInfo(null);
+
+    // Fetch PI with DP + Termin info (if exists) for this SO
+    try {
+      const { data: piData } = await supabase
+        .from('proforma_invoices')
+        .select('pi_number, dp_percent, term_days, payment_note, grand_total')
+        .eq('sales_order_id', order.id)
+        .not('dp_percent', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (piData && piData.length > 0) {
+        const pi = piData[0] as any;
+        setPiDpInfo({
+          pi_number: pi.pi_number,
+          dp_percent: Number(pi.dp_percent) || 0,
+          term_days: pi.term_days,
+          payment_note: pi.payment_note,
+          grand_total: Number(pi.grand_total) || 0,
+        });
+      }
+    } catch (err) {
+      console.error('Failed to fetch PI DP info:', err);
+    }
 
     // Fetch approve reason if status is approved or beyond
     if (['approved', 'partially_delivered', 'delivered', 'fulfilled'].includes(order.status)) {
