@@ -442,6 +442,26 @@ const PiPdfTemplateCompact = React.forwardRef<HTMLDivElement, PiPdfTemplateProps
                     </tbody>
                   </table>
                 </div>
+
+                {paymentNote && (
+                  <div
+                    style={{
+                      marginTop: '2.2mm',
+                      padding: '2mm 2.6mm',
+                      borderLeft: `0.9mm solid ${CORP_GREEN}`,
+                      background: CORP_GREEN_LIGHT,
+                      fontSize: '2.95mm',
+                      lineHeight: '1.4',
+                      WebkitPrintColorAdjust: 'exact',
+                      printColorAdjust: 'exact',
+                      breakInside: 'avoid' as any,
+                      pageBreakInside: 'avoid',
+                    }}
+                  >
+                    <span style={{ fontWeight: 700 }}>Note: </span>
+                    <span>{paymentNote}</span>
+                  </div>
+                )}
               </div>
 
               {/* RIGHT */}
