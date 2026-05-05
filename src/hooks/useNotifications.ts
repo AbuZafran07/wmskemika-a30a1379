@@ -405,8 +405,10 @@ export function useNotifications() {
           .limit(20);
 
         if (resolvedRequests && resolvedRequests.length > 0) {
-          const approverIds = [...new Set(resolvedRequests.map(r => r.approved_by).filter(Boolean))];
-          const resolvedDeliveryIds = [...new Set(resolvedRequests.map(r => r.delivery_request_id))];
+          const readSet = readCommentIdsRef.current;
+          const filteredResolved = resolvedRequests.filter((r: any) => !readSet.has(r.id));
+          const approverIds = [...new Set(filteredResolved.map((r: any) => r.approved_by).filter(Boolean))];
+          const resolvedDeliveryIds = [...new Set(filteredResolved.map((r: any) => r.delivery_request_id))];
           
           const [{ data: approverProfiles }, { data: resolvedDeliveryReqs }] = await Promise.all([
             approverIds.length > 0
@@ -420,7 +422,7 @@ export function useNotifications() {
             resolvedSoMap[dr.id] = dr.sales_order_headers?.sales_order_number || '';
           });
 
-          resolvedRequests.forEach((req: any) => {
+          filteredResolved.forEach((req: any) => {
             const approverName = approverProfiles?.find((p: any) => p.id === req.approved_by)?.full_name || 'Unknown';
             const isApproved = req.approval_status === 'approved';
             const approvedAt = req.approved_at ? new Date(req.approved_at) : new Date(req.created_at);
