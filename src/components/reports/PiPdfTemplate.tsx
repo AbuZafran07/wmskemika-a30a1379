@@ -64,6 +64,14 @@ export interface PiPdfData {
   items: PiPdfItem[];
   summary: PiPdfSummary;
   signatory: PiPdfSignatory;
+  /** Optional payment scheme. If set to 'dp_termin', a Rincian Pembayaran block is rendered. */
+  paymentScheme?: {
+    mode: 'dp_termin';
+    dpPercent: number;
+    dpAmount: number;
+    remainingAmount: number;
+    termDescription: string; // e.g. "30 hari setelah invoice diterbitkan"
+  } | null;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────
