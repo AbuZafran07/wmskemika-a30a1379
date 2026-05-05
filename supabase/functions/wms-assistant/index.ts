@@ -34,7 +34,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { messages } = await req.json();
+    const body = await req.json();
+    const { messages, mode } = body || {};
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
@@ -65,6 +66,101 @@ Deno.serve(async (req) => {
       }
       return { role: m.role, content: String(m?.content ?? "") };
     });
+
+    // ===== CLASSIFY MODE =====
+    // Used to auto-detect WMS error type from a screenshot and suggest follow-up questions.
+    if (mode === "classify") {
+      const classifyResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            {
+              role: "system",
+              content:
+                "Anda klasifikator screenshot WMS Kemika. Lihat gambar dan deteksi jenis masalah. Jenis valid: AVAILABLE_ZERO, ON_HAND_VS_BOOKED, FEFO_BATCH, APPROVAL_STUCK, DELIVERY_KANBAN, STOCK_ADJUSTMENT, ERROR_TOAST, PERMISSION, OTHER. Selalu kembalikan via tool call. Pertanyaan saran harus singkat, spesifik, Bahasa Indonesia, maksimal 3 buah.",
+            },
+            ...normalized,
+          ],
+          tools: [
+            {
+              type: "function",
+              function: {
+                name: "classify_screenshot",
+                description: "Mengklasifikasi screenshot WMS dan menyarankan pertanyaan paling sesuai.",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    issue_type: {
+                      type: "string",
+                      enum: [
+                        "AVAILABLE_ZERO",
+                        "ON_HAND_VS_BOOKED",
+                        "FEFO_BATCH",
+                        "APPROVAL_STUCK",
+                        "DELIVERY_KANBAN",
+                        "STOCK_ADJUSTMENT",
+                        "ERROR_TOAST",
+                        "PERMISSION",
+                        "OTHER",
+                      ],
+                    },
+                    summary: { type: "string", description: "Ringkasan 1 kalimat yang terlihat di screenshot." },
+                    confidence: { type: "number", description: "0..1" },
+                    suggested_questions: {
+                      type: "array",
+                      items: { type: "string" },
+                      minItems: 1,
+                      maxItems: 3,
+                    },
+                  },
+                  required: ["issue_type", "summary", "suggested_questions"],
+                  additionalProperties: false,
+                },
+              },
+            },
+          ],
+          tool_choice: { type: "function", function: { name: "classify_screenshot" } },
+        }),
+      });
+
+      if (!classifyResp.ok) {
+        if (classifyResp.status === 429 || classifyResp.status === 402) {
+          return new Response(JSON.stringify({ error: classifyResp.status === 429 ? "Rate limit" : "Kredit AI habis" }), {
+            status: classifyResp.status,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const t = await classifyResp.text();
+        console.error("classify error:", classifyResp.status, t);
+        return new Response(JSON.stringify({ error: "Classify failed" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const data = await classifyResp.json();
+      const call = data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+      let parsed: any = null;
+      try {
+        parsed = call ? JSON.parse(call) : null;
+      } catch {
+        parsed = null;
+      }
+      return new Response(
+        JSON.stringify(
+          parsed || {
+            issue_type: "OTHER",
+            summary: "",
+            suggested_questions: ["Tolong jelaskan apa yang terlihat di screenshot ini."],
+          }
+        ),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
