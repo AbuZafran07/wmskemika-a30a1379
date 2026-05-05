@@ -528,27 +528,13 @@ export default function ProformaInvoicePage() {
           const biayaPengantaran = Math.round(detail.shipping_cost || 0);
           const subTotalCalc = Math.round(dpp + pajak + biayaPengantaran);
           const materai = Math.round(detail.materai_amount || 0);
-          const saldo = Math.round(subTotalCalc + materai);
+          const grossTotal = Math.round(subTotalCalc + materai);
 
-          // Detect payment scheme from delivery labels
-          const labels = (detail as any).payment_labels as string[] | undefined;
-          const hasDpTerminLabel = !!labels?.some((n) => /dp\s*\+\s*termin/i.test(n));
-          // Parse "DP 30%" pattern from payment_terms; default 30% if not found
-          const termsText = detail.payment_terms || '';
-          const dpMatch = termsText.match(/DP\s*(\d{1,3})\s*%/i);
-          const dpPercent = dpMatch ? Math.min(100, parseInt(dpMatch[1], 10)) : 30;
-          // Parse termin description: text after "/" or "sisa", fallback default
-          let termDesc = '';
-          const sisaMatch = termsText.match(/(?:sisa|pelunasan)[^,;\/]*/i);
-          if (sisaMatch) {
-            termDesc = sisaMatch[0].replace(/^(sisa|pelunasan)\s*/i, '').trim();
-          } else {
-            const slashPart = termsText.split('/')[1];
-            if (slashPart) termDesc = slashPart.trim();
-          }
-          if (!termDesc) termDesc = '30 hari setelah invoice diterbitkan';
-          const dpAmount = Math.round((saldo * dpPercent) / 100);
-          const remainingAmount = saldo - dpAmount;
+          // DP + Termin scheme: DP nominal goes to Down Payment row; Saldo = sisa
+          const dpPercent = (detail as any).dp_percent ? Number((detail as any).dp_percent) : 0;
+          const dpAmount = dpPercent > 0 ? Math.round((grossTotal * dpPercent) / 100) : 0;
+          const saldo = grossTotal - dpAmount;
+          const paymentNote = (detail as any).payment_note || null;
 
           const pdfData: PiPdfData = {
             company: {
@@ -582,7 +568,7 @@ export default function ProformaInvoicePage() {
               deliveryFee: biayaPengantaran,
               subTotal: subTotalCalc,
               stampDuty: materai,
-              downPayment: 0,
+              downPayment: dpAmount,
               balance: saldo,
             },
             signatory: {
@@ -591,15 +577,7 @@ export default function ProformaInvoicePage() {
               signatureUrl: (detail as any).approver_signature_url || null,
               isApproved: !!detail.approved_by && !!detail.approved_at,
             },
-            paymentScheme: hasDpTerminLabel
-              ? {
-                  mode: 'dp_termin',
-                  dpPercent,
-                  dpAmount,
-                  remainingAmount,
-                  termDescription: termDesc,
-                }
-              : null,
+            paymentNote,
           };
 
           return <PiPdfTemplate ref={printRef} data={pdfData} />;
