@@ -221,6 +221,15 @@ export default function SalesOrder() {
   const [stockOutHistory, setStockOutHistory] = useState<any[]>([]);
   const [stockOutHistoryLoading, setStockOutHistoryLoading] = useState(false);
 
+  // Proforma Invoice (DP + Termin) info for the selected order
+  const [piDpInfo, setPiDpInfo] = useState<{
+    pi_number: string;
+    dp_percent: number;
+    term_days: number | null;
+    payment_note: string | null;
+    grand_total: number;
+  } | null>(null);
+
   // === Form state ===
   const [soNumber, setSoNumber] = useState("");
   const [orderDate, setOrderDate] = useState(new Date().toISOString().split("T")[0]);
