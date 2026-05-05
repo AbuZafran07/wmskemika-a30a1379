@@ -17,6 +17,33 @@ export interface Notification {
   refNo?: string;
   createdAt: Date;
   read: boolean;
+  commentIds?: string[];
+  count?: number;
+}
+
+// Persisted set of comment IDs that the current user has acknowledged (clicked).
+const READ_CARD_COMMENTS_KEY = 'read_card_comment_ids_v1';
+const MAX_READ_IDS = 500;
+
+function loadReadCommentIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(READ_CARD_COMMENTS_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveReadCommentIds(set: Set<string>) {
+  try {
+    // Cap to most recent N to avoid unbounded growth
+    const arr = Array.from(set).slice(-MAX_READ_IDS);
+    localStorage.setItem(READ_CARD_COMMENTS_KEY, JSON.stringify(arr));
+  } catch {
+    /* ignore */
+  }
 }
 
 // Sound notification utility
@@ -103,6 +130,13 @@ export function useNotifications() {
     return saved !== null ? JSON.parse(saved) : true;
   });
   const previousNotifIds = useRef<Set<string>>(new Set());
+  // Cache of card IDs the current user is involved in (created/assigned/commented)
+  // Used to short-circuit realtime INSERT checks without extra DB queries.
+  const involvedCardIdsRef = useRef<Set<string>>(new Set());
+  // SO numbers per delivery_request_id (for toast labels)
+  const cardSoMapRef = useRef<Record<string, string>>({});
+  // Persisted read state for card comments
+  const readCommentIdsRef = useRef<Set<string>>(loadReadCommentIds());
 
   const toggleSound = useCallback((enabled: boolean) => {
     setSoundEnabled(enabled);
@@ -434,6 +468,8 @@ export function useNotifications() {
           ...(ownedCards || []).map((c: any) => c.id),
           ...(commentedCards || []).map((c: any) => c.delivery_request_id),
         ]);
+        // Refresh involvement cache for realtime fast-path
+        involvedCardIdsRef.current = involvedIds;
 
         if (involvedIds.size > 0) {
           const { data: recentComments } = await supabase
@@ -461,22 +497,41 @@ export function useNotifications() {
             drList?.forEach((dr: any) => {
               drSoMap[dr.id] = dr.sales_order_headers?.sales_order_number || '';
             });
+            // Merge into ref cache for realtime toast labels
+            cardSoMapRef.current = { ...cardSoMapRef.current, ...drSoMap };
 
-            recentComments.forEach((c: any) => {
-              const senderName = senderProfiles?.find((p: any) => p.id === c.user_id)?.full_name || 'Seseorang';
-              const soNumber = drSoMap[c.delivery_request_id] || '';
+            // Group comments per card; one notification entry per card with count
+            const readSet = readCommentIdsRef.current;
+            const groups = new Map<string, any[]>();
+            for (const c of recentComments as any[]) {
+              if (readSet.has(c.id)) continue; // skip already-acknowledged
+              const arr = groups.get(c.delivery_request_id) || [];
+              arr.push(c);
+              groups.set(c.delivery_request_id, arr);
+            }
+
+            groups.forEach((cs, drId) => {
+              // cs sorted desc by created_at (already from query)
+              const latest = cs[0];
+              const soNumber = drSoMap[drId] || '';
               const soLabel = soNumber ? ` [${soNumber}]` : '';
-              const preview = c.message.length > 100 ? `${c.message.substring(0, 100)}...` : c.message;
+              const senderName = senderProfiles?.find((p: any) => p.id === latest.user_id)?.full_name || 'Seseorang';
+              const preview = latest.message.length > 100
+                ? `${latest.message.substring(0, 100)}...`
+                : latest.message;
+              const countLabel = cs.length > 1 ? ` (${cs.length} komentar)` : '';
               notifs.push({
-                id: `card_comment_${c.id}`,
+                id: `card_comment_${drId}`,
                 type: 'card_comment',
-                title: `💬 Komentar baru${soLabel}`,
+                title: `💬 Komentar baru${soLabel}${countLabel}`,
                 message: `${senderName}: ${preview}`,
                 module: 'delivery',
-                refId: c.delivery_request_id,
+                refId: drId,
                 refNo: soNumber,
-                createdAt: new Date(c.created_at),
+                createdAt: new Date(latest.created_at),
                 read: false,
+                commentIds: cs.map((x: any) => x.id),
+                count: cs.length,
               });
             });
           }
@@ -693,58 +748,67 @@ export function useNotifications() {
         { event: 'INSERT', schema: 'public', table: 'delivery_comments' },
         async (payload) => {
           const inserted = payload.new as any;
-          // Show toast for new comments on cards user is involved in (not own comments)
-          if (
-            inserted?.type === 'comment' &&
-            inserted?.user_id &&
-            inserted.user_id !== user?.id &&
-            user?.id
-          ) {
-            // Check involvement: created_by/assigned_to OR user has commented before
-            const [{ data: dr }, { count: prevCount }] = await Promise.all([
-              supabase
-                .from('delivery_requests')
-                .select('id, created_by, assigned_to, sales_order_headers!inner(sales_order_number)')
-                .eq('id', inserted.delivery_request_id)
-                .maybeSingle(),
-              supabase
-                .from('delivery_comments')
-                .select('id', { count: 'exact', head: true })
-                .eq('delivery_request_id', inserted.delivery_request_id)
-                .eq('user_id', user.id),
-            ]);
+          if (!user?.id || !inserted?.user_id) {
+            return;
+          }
+          // Self-commented: just add this card to involvement cache. No toast, no refetch.
+          if (inserted.user_id === user.id) {
+            involvedCardIdsRef.current.add(inserted.delivery_request_id);
+            return;
+          }
+          // Only handle real comments (not label requests etc.)
+          if (inserted.type !== 'comment') return;
 
-            const isInvolved =
-              dr?.created_by === user.id ||
-              dr?.assigned_to === user.id ||
-              (prevCount || 0) > 0;
+          // Fast-path: use cached involvement set – avoids extra queries on every INSERT.
+          let isInvolved = involvedCardIdsRef.current.has(inserted.delivery_request_id);
+          let soNumber = cardSoMapRef.current[inserted.delivery_request_id] || '';
 
-            if (isInvolved) {
-              const { data: sender } = await supabase
-                .from('profiles')
-                .select('full_name')
-                .eq('id', inserted.user_id)
-                .maybeSingle();
-              const senderName = sender?.full_name || 'Seseorang';
-              const soNumber = (dr as any)?.sales_order_headers?.sales_order_number || '';
-              const soLabel = soNumber ? ` [${soNumber}]` : '';
-              const preview = inserted.message?.length > 80
-                ? `${inserted.message.substring(0, 80)}...`
-                : (inserted.message || '');
-              toast.info(`💬 Komentar baru${soLabel}`, {
-                description: `${senderName}: ${preview}`,
-                duration: 7000,
-                action: {
-                  label: '📋 Lihat Kartu',
-                  onClick: () => {
-                    window.location.href = `/request-delivery?card=${inserted.delivery_request_id}`;
-                  },
-                },
-              });
-              if (soundEnabled) playNotificationSound('info');
+          // Slow-path only if we don't know this card yet
+          if (!isInvolved) {
+            const { data: dr } = await supabase
+              .from('delivery_requests')
+              .select('id, created_by, assigned_to, sales_order_headers!inner(sales_order_number)')
+              .eq('id', inserted.delivery_request_id)
+              .maybeSingle();
+            if (dr?.created_by === user.id || dr?.assigned_to === user.id) {
+              isInvolved = true;
+              involvedCardIdsRef.current.add(inserted.delivery_request_id);
+            }
+            const so = (dr as any)?.sales_order_headers?.sales_order_number || '';
+            if (so) {
+              soNumber = so;
+              cardSoMapRef.current[inserted.delivery_request_id] = so;
             }
           }
-          fetchNotifications();
+
+          if (isInvolved) {
+            const { data: sender } = await supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('id', inserted.user_id)
+              .maybeSingle();
+            const senderName = sender?.full_name || 'Seseorang';
+            const soLabel = soNumber ? ` [${soNumber}]` : '';
+            const preview = inserted.message?.length > 80
+              ? `${inserted.message.substring(0, 80)}...`
+              : (inserted.message || '');
+            toast.info(`💬 Komentar baru${soLabel}`, {
+              description: `${senderName}: ${preview}`,
+              duration: 7000,
+              action: {
+                label: '📋 Lihat Kartu',
+                onClick: () => {
+                  // Mark this comment as acknowledged so it won't show in bell list
+                  readCommentIdsRef.current.add(inserted.id);
+                  saveReadCommentIds(readCommentIdsRef.current);
+                  window.location.href = `/request-delivery?card=${inserted.delivery_request_id}`;
+                },
+              },
+            });
+            if (soundEnabled) playNotificationSound('info');
+            // Refresh aggregated bell list (debounced via React state)
+            fetchNotifications();
+          }
         }
       )
       .subscribe();
@@ -765,9 +829,15 @@ export function useNotifications() {
   }, [fetchNotifications]);
 
   const markAsRead = (id: string) => {
-    setNotifications(prev => prev.map(n => 
-      n.id === id ? { ...n, read: true } : n
-    ));
+    setNotifications(prev => prev.map(n => {
+      if (n.id !== id) return n;
+      // Persist underlying comment IDs so card_comment entries don't reappear
+      if (n.type === 'card_comment' && n.commentIds?.length) {
+        n.commentIds.forEach(cid => readCommentIdsRef.current.add(cid));
+        saveReadCommentIds(readCommentIdsRef.current);
+      }
+      return { ...n, read: true };
+    }));
     setUnreadCount(prev => {
       const newCount = Math.max(0, prev - 1);
       setBadgeCount(newCount);
@@ -776,7 +846,15 @@ export function useNotifications() {
   };
 
   const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    setNotifications(prev => {
+      prev.forEach(n => {
+        if (n.type === 'card_comment' && n.commentIds?.length) {
+          n.commentIds.forEach(cid => readCommentIdsRef.current.add(cid));
+        }
+      });
+      saveReadCommentIds(readCommentIdsRef.current);
+      return prev.map(n => ({ ...n, read: true }));
+    });
     setUnreadCount(0);
     setBadgeCount(0);
   };
