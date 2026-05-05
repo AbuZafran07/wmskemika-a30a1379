@@ -691,7 +691,59 @@ export function useNotifications() {
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'delivery_comments' },
-        () => {
+        async (payload) => {
+          const inserted = payload.new as any;
+          // Show toast for new comments on cards user is involved in (not own comments)
+          if (
+            inserted?.type === 'comment' &&
+            inserted?.user_id &&
+            inserted.user_id !== user?.id &&
+            user?.id
+          ) {
+            // Check involvement: created_by/assigned_to OR user has commented before
+            const [{ data: dr }, { count: prevCount }] = await Promise.all([
+              supabase
+                .from('delivery_requests')
+                .select('id, created_by, assigned_to, sales_order_headers!inner(sales_order_number)')
+                .eq('id', inserted.delivery_request_id)
+                .maybeSingle(),
+              supabase
+                .from('delivery_comments')
+                .select('id', { count: 'exact', head: true })
+                .eq('delivery_request_id', inserted.delivery_request_id)
+                .eq('user_id', user.id),
+            ]);
+
+            const isInvolved =
+              dr?.created_by === user.id ||
+              dr?.assigned_to === user.id ||
+              (prevCount || 0) > 0;
+
+            if (isInvolved) {
+              const { data: sender } = await supabase
+                .from('profiles')
+                .select('full_name')
+                .eq('id', inserted.user_id)
+                .maybeSingle();
+              const senderName = sender?.full_name || 'Seseorang';
+              const soNumber = (dr as any)?.sales_order_headers?.sales_order_number || '';
+              const soLabel = soNumber ? ` [${soNumber}]` : '';
+              const preview = inserted.message?.length > 80
+                ? `${inserted.message.substring(0, 80)}...`
+                : (inserted.message || '');
+              toast.info(`💬 Komentar baru${soLabel}`, {
+                description: `${senderName}: ${preview}`,
+                duration: 7000,
+                action: {
+                  label: '📋 Lihat Kartu',
+                  onClick: () => {
+                    window.location.href = `/request-delivery?card=${inserted.delivery_request_id}`;
+                  },
+                },
+              });
+              if (soundEnabled) playNotificationSound('info');
+            }
+          }
           fetchNotifications();
         }
       )
