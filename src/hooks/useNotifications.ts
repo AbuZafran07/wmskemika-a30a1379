@@ -827,8 +827,11 @@ export function useNotifications() {
           // Only handle real comments (not label requests etc.)
           if (inserted.type !== 'comment') return;
 
+          const KANBAN_ROLES = ['super_admin', 'admin', 'finance', 'purchasing', 'warehouse', 'sales'];
+          const isKanbanRole = !!user.role && KANBAN_ROLES.includes(user.role);
+
           // Fast-path: use cached involvement set – avoids extra queries on every INSERT.
-          let isInvolved = involvedCardIdsRef.current.has(inserted.delivery_request_id);
+          let isInvolved = isKanbanRole || involvedCardIdsRef.current.has(inserted.delivery_request_id);
           let soNumber = cardSoMapRef.current[inserted.delivery_request_id] || '';
 
           // Slow-path only if we don't know this card yet
