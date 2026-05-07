@@ -679,7 +679,7 @@ export default function SalesOrder() {
       toast.error(language === "en" ? "Please fill all required fields" : "Harap isi semua field wajib");
       return;
     }
-    if (!salesPulseReferenceNumber) {
+    if (allocationType !== "Sample" && !salesPulseReferenceNumber) {
       toast.error(
         language === "en"
           ? "SalesPulse Reference is required"
@@ -730,7 +730,7 @@ export default function SalesOrder() {
         order_date: orderDate,
         customer_id: customerId,
         customer_po_number: sanitizedCustomerPo,
-        sales_pulse_reference_number: salesPulseReferenceNumber,
+        sales_pulse_reference_number: salesPulseReferenceNumber || null,
         sales_name: salesName,
         allocation_type: allocationType,
         project_instansi: projectInstansi,
@@ -1433,7 +1433,15 @@ export default function SalesOrder() {
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="space-y-2 md:col-span-2">
-                <Label>{language === "en" ? "SalesPulse Reference No." : "No. Referensi SalesPulse"} *</Label>
+                 <Label>
+                   {language === "en" ? "SalesPulse Reference No." : "No. Referensi SalesPulse"}
+                   {allocationType !== "Sample" && " *"}
+                   {allocationType === "Sample" && (
+                     <span className="ml-1 text-xs text-muted-foreground">
+                       ({language === "en" ? "optional for Sample" : "opsional untuk Sample"})
+                     </span>
+                   )}
+                 </Label>
                 <SearchableSelect
                   value={salesPulseReferenceNumber}
                   onValueChange={setSalesPulseReferenceNumber}
