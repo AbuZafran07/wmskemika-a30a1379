@@ -18,6 +18,9 @@ import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
+import JSZip from 'jszip';
+
+const STORAGE_BUCKETS = ['avatars', 'chat-attachments', 'documents', 'product-photos', 'signatures'] as const;
 
 const BACKUP_TABLES = [
   // Master Data
@@ -80,6 +83,8 @@ export default function BackupRestore() {
     new Set(BACKUP_TABLES.map(t => t.key))
   );
   const [backingUp, setBackingUp] = useState(false);
+  const [includeFiles, setIncludeFiles] = useState(false);
+  const [backupProgress, setBackupProgress] = useState<string>('');
   
   // Restore state
   const [restoring, setRestoring] = useState(false);
@@ -157,6 +162,7 @@ export default function BackupRestore() {
 
     setBackingUp(true);
     try {
+      setBackupProgress('Mengambil data dari tabel...');
       const backupData: Record<string, unknown[]> = {};
       const tableKeys = Array.from(selectedTables);
 
@@ -180,16 +186,53 @@ export default function BackupRestore() {
           exported_at: new Date().toISOString(),
           tables: tableKeys,
           total_records: Object.values(backupData).reduce((sum, arr) => sum + arr.length, 0),
+          includes_files: includeFiles,
         },
         data: backupData,
       };
 
-      // Download as JSON
-      const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
+      const stamp = format(new Date(), 'yyyy-MM-dd-HHmmss');
+      let blob: Blob;
+      let fileName: string;
+      let totalFiles = 0;
+      let totalFileBytes = 0;
+
+      if (includeFiles) {
+        const zip = new JSZip();
+        zip.file('data.json', JSON.stringify(exportPayload, null, 2));
+
+        for (const bucket of STORAGE_BUCKETS) {
+          setBackupProgress(`Mengunduh file dari bucket "${bucket}"...`);
+          const allPaths = await listBucketRecursive(bucket);
+          for (let i = 0; i < allPaths.length; i++) {
+            const path = allPaths[i];
+            try {
+              const { data: fileBlob, error } = await supabase.storage.from(bucket).download(path);
+              if (error || !fileBlob) continue;
+              zip.file(`files/${bucket}/${path}`, fileBlob);
+              totalFiles++;
+              totalFileBytes += fileBlob.size;
+              if (i % 5 === 0) {
+                setBackupProgress(`Bucket "${bucket}": ${i + 1}/${allPaths.length} file`);
+              }
+            } catch (e) {
+              console.warn(`Skip file ${bucket}/${path}:`, e);
+            }
+          }
+        }
+
+        setBackupProgress(`Mengompres ZIP (${totalFiles} file)...`);
+        blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+        fileName = `backup-kemika-full-${stamp}.zip`;
+      } else {
+        blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
+        fileName = `backup-kemika-${stamp}.json`;
+      }
+
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `backup-kemika-${format(new Date(), 'yyyy-MM-dd-HHmmss')}.json`;
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -203,15 +246,41 @@ export default function BackupRestore() {
         action: 'MANUAL_BACKUP',
         module: 'backup',
         ref_table: 'settings',
-        new_data: { tables: tableKeys, total_records: exportPayload._meta.total_records },
+        new_data: {
+          tables: tableKeys,
+          total_records: exportPayload._meta.total_records,
+          includes_files: includeFiles,
+          total_files: totalFiles,
+          total_file_bytes: totalFileBytes,
+        },
       });
 
-      toast.success(`Backup berhasil! ${exportPayload._meta.total_records} record dari ${tableKeys.length} tabel.`);
+      toast.success(
+        `Backup berhasil! ${exportPayload._meta.total_records} record${includeFiles ? ` + ${totalFiles} file` : ''} dari ${tableKeys.length} tabel.`
+      );
     } catch (err: any) {
       console.error('Backup error:', err);
       toast.error(err.message || 'Gagal membuat backup');
     }
+    setBackupProgress('');
     setBackingUp(false);
+  };
+
+  // Recursively list all file paths inside a bucket
+  const listBucketRecursive = async (bucket: string, prefix = ''): Promise<string[]> => {
+    const out: string[] = [];
+    const { data, error } = await supabase.storage.from(bucket).list(prefix, { limit: 1000 });
+    if (error || !data) return out;
+    for (const item of data) {
+      // Folder entries have id = null in Supabase storage list
+      if ((item as any).id === null) {
+        const sub = await listBucketRecursive(bucket, prefix ? `${prefix}/${item.name}` : item.name);
+        out.push(...sub);
+      } else {
+        out.push(prefix ? `${prefix}/${item.name}` : item.name);
+      }
+    }
+    return out;
   };
 
   // ============ RESTORE ============
