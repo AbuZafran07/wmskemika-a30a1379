@@ -20,17 +20,46 @@ import { format } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 
 const BACKUP_TABLES = [
+  // Master Data
   { key: 'products', label: 'Produk', icon: '📦' },
   { key: 'categories', label: 'Kategori', icon: '📂' },
   { key: 'units', label: 'Satuan', icon: '📏' },
   { key: 'suppliers', label: 'Supplier', icon: '🏭' },
   { key: 'customers', label: 'Customer', icon: '👥' },
+  // Transaksi - Plan / Sales Order
   { key: 'plan_order_headers', label: 'Plan Order (Header)', icon: '📋' },
   { key: 'plan_order_items', label: 'Plan Order (Items)', icon: '📝' },
   { key: 'sales_order_headers', label: 'Sales Order (Header)', icon: '🧾' },
   { key: 'sales_order_items', label: 'Sales Order (Items)', icon: '📝' },
+  // Proforma Invoice
+  { key: 'proforma_invoices', label: 'Proforma Invoice (Header)', icon: '💰' },
+  { key: 'proforma_invoice_items', label: 'Proforma Invoice (Items)', icon: '📝' },
+  // Stock In / Out / Adjustment
+  { key: 'stock_in_headers', label: 'Stock In (Header)', icon: '📥' },
+  { key: 'stock_in_items', label: 'Stock In (Items)', icon: '📝' },
+  { key: 'stock_out_headers', label: 'Stock Out (Header)', icon: '📤' },
+  { key: 'stock_out_items', label: 'Stock Out (Items)', icon: '📝' },
+  { key: 'stock_adjustments', label: 'Stock Adjustment (Header)', icon: '⚖️' },
+  { key: 'stock_adjustment_items', label: 'Stock Adjustment (Items)', icon: '📝' },
   { key: 'inventory_batches', label: 'Inventory Batches', icon: '🗃️' },
   { key: 'stock_transactions', label: 'Stock Transactions', icon: '🔄' },
+  // Delivery / Kanban
+  { key: 'delivery_requests', label: 'Delivery Requests', icon: '🚚' },
+  { key: 'delivery_orders', label: 'Delivery Orders', icon: '📦' },
+  { key: 'delivery_comments', label: 'Delivery Comments', icon: '💬' },
+  { key: 'delivery_checklists', label: 'Delivery Checklists', icon: '✅' },
+  { key: 'delivery_labels', label: 'Delivery Labels', icon: '🏷️' },
+  { key: 'delivery_card_labels', label: 'Delivery Card Labels', icon: '🏷️' },
+  // Chat K'talk
+  { key: 'chat_messages', label: "K'talk Messages", icon: '💬' },
+  { key: 'chat_reactions', label: "K'talk Reactions", icon: '😀' },
+  // Lainnya
+  { key: 'attachments', label: 'Attachments (Metadata)', icon: '📎' },
+  { key: 'national_holidays', label: 'Hari Libur Nasional', icon: '📅' },
+  { key: 'profiles', label: 'Profiles (User)', icon: '👤' },
+  { key: 'user_roles', label: 'User Roles', icon: '🔐' },
+  { key: 'user_signatures', label: 'User Signatures', icon: '✍️' },
+  { key: 'audit_logs', label: 'Audit Logs', icon: '📜' },
   { key: 'settings', label: 'Pengaturan Sistem', icon: '⚙️' },
 ] as const;
 

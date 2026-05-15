@@ -30,12 +30,29 @@ serve(async (req) => {
       });
     }
 
-    // Tables to backup
+    // Tables to backup - SEMUA data transaksi & master
     const tables = [
+      // Master Data
       "products", "categories", "units", "suppliers", "customers",
+      // Plan & Sales Order
       "plan_order_headers", "plan_order_items",
       "sales_order_headers", "sales_order_items",
-      "inventory_batches", "stock_transactions", "settings",
+      // Proforma Invoice
+      "proforma_invoices", "proforma_invoice_items",
+      // Stock In / Out / Adjustment
+      "stock_in_headers", "stock_in_items",
+      "stock_out_headers", "stock_out_items",
+      "stock_adjustments", "stock_adjustment_items",
+      "inventory_batches", "stock_transactions",
+      // Delivery / Kanban
+      "delivery_requests", "delivery_orders", "delivery_comments",
+      "delivery_checklists", "delivery_labels", "delivery_card_labels",
+      // Chat K'talk
+      "chat_messages", "chat_reactions",
+      // Lainnya
+      "attachments", "national_holidays",
+      "profiles", "user_roles", "user_signatures",
+      "audit_logs", "settings",
     ];
 
     const backupData: Record<string, unknown[]> = {};
