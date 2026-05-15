@@ -561,17 +561,37 @@ export default function BackupRestore() {
 
           <Separator />
 
+          <label className="flex items-start gap-3 p-3 rounded-lg border bg-muted/30 cursor-pointer hover:bg-accent/40 transition-colors">
+            <Checkbox
+              checked={includeFiles}
+              onCheckedChange={(v) => setIncludeFiles(v === true)}
+              className="mt-0.5"
+            />
+            <div className="space-y-0.5">
+              <p className="text-sm font-medium">Sertakan file fisik dari Storage (ZIP)</p>
+              <p className="text-xs text-muted-foreground">
+                Mengikutkan foto produk, signature, lampiran dokumen PO/DO, dan file K'talk. Hasil akan diunduh sebagai <span className="font-mono">.zip</span>. Ukuran bisa besar & proses lebih lama.
+              </p>
+            </div>
+          </label>
+
           <Button onClick={handleManualBackup} disabled={backingUp || selectedTables.size === 0}>
             {backingUp ? (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
             ) : (
               <Download className="w-4 h-4 mr-2" />
             )}
-            Download Backup
+            {includeFiles ? 'Download Backup (ZIP + Files)' : 'Download Backup (JSON)'}
             {selectedTables.size > 0 && (
               <Badge variant="secondary" className="ml-2">{selectedTables.size} tabel</Badge>
             )}
           </Button>
+          {backingUp && backupProgress && (
+            <p className="text-xs text-muted-foreground flex items-center gap-2">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              {backupProgress}
+            </p>
+          )}
         </CardContent>
       </Card>
 
