@@ -37,8 +37,8 @@ export interface ProformaInvoice {
   customer?: { name: string; code: string; customer_type: string | null };
   sales_order?: { sales_order_number: string; customer_po_number: string; sales_name: string };
   items?: ProformaInvoiceItem[];
-  approved_by_profile?: { full_name: string | null; email: string } | null;
-  created_by_profile?: { full_name: string | null; email: string } | null;
+  approved_by_profile?: { full_name: string | null; email?: string | null } | null;
+  created_by_profile?: { full_name: string | null; email?: string | null } | null;
   payment_labels?: string[];
 }
 
@@ -134,7 +134,7 @@ export function useProformaInvoiceDetail(id: string | null) {
       let approverSignatureUrl: string | null = null;
       
       if (data.approved_by) {
-        const { data: p } = await supabase.from('profiles').select('full_name, email').eq('id', data.approved_by).maybeSingle();
+        const { data: p } = await supabase.from('profiles').select('full_name').eq('id', data.approved_by).maybeSingle();
         approvedByProfile = p;
         // Fetch approver signature
         const { data: sig } = await supabase.from('user_signatures').select('signature_path').eq('user_id', data.approved_by).maybeSingle();
@@ -144,7 +144,7 @@ export function useProformaInvoiceDetail(id: string | null) {
         }
       }
       if (data.created_by) {
-        const { data: p } = await supabase.from('profiles').select('full_name, email').eq('id', data.created_by).maybeSingle();
+        const { data: p } = await supabase.from('profiles').select('full_name').eq('id', data.created_by).maybeSingle();
         createdByProfile = p;
       }
 
