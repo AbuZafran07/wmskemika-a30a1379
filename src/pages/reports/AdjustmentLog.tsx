@@ -111,7 +111,7 @@ export default function AdjustmentLog() {
         .map(a => a.approved_by);
       
       const { data: profiles } = approverIds.length > 0 
-        ? await supabase.from('profiles').select('id, full_name, email').in('id', approverIds)
+        ? await supabase.from('profiles_chat_view').select('id, full_name').in('id', approverIds)
         : { data: [] };
 
       const profileMap: Record<string, string> = {};
