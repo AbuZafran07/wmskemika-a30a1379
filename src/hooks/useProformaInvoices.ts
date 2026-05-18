@@ -134,7 +134,7 @@ export function useProformaInvoiceDetail(id: string | null) {
       let approverSignatureUrl: string | null = null;
       
       if (data.approved_by) {
-        const { data: p } = await supabase.from('profiles').select('full_name, email').eq('id', data.approved_by).single();
+        const { data: p } = await supabase.from('profiles').select('full_name, email').eq('id', data.approved_by).maybeSingle();
         approvedByProfile = p;
         // Fetch approver signature
         const { data: sig } = await supabase.from('user_signatures').select('signature_path').eq('user_id', data.approved_by).maybeSingle();
@@ -144,7 +144,7 @@ export function useProformaInvoiceDetail(id: string | null) {
         }
       }
       if (data.created_by) {
-        const { data: p } = await supabase.from('profiles').select('full_name, email').eq('id', data.created_by).single();
+        const { data: p } = await supabase.from('profiles').select('full_name, email').eq('id', data.created_by).maybeSingle();
         createdByProfile = p;
       }
 

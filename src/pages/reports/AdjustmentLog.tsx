@@ -116,7 +116,7 @@ export default function AdjustmentLog() {
 
       const profileMap: Record<string, string> = {};
       (profiles || []).forEach(p => {
-        profileMap[p.id] = p.full_name || p.email;
+        profileMap[p.id] = p.full_name || '';
       });
 
       // Map items to adjustments

@@ -105,12 +105,12 @@ export function ApprovalRequestNotification() {
       // Fetch creator names
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, full_name, email')
+        .select('id, full_name')
         .in('id', Array.from(creatorIds));
 
       const profileMap: Record<string, string> = {};
       profiles?.forEach(p => {
-        profileMap[p.id] = p.full_name || p.email;
+        profileMap[p.id] = p.full_name || '';
       });
 
       // Map Plan Orders
