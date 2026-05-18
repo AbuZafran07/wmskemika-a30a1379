@@ -74,16 +74,51 @@ serve(async (req) => {
   }
 
   try {
-    // Verify authentication
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      });
-    }
-
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const cronSecret = Deno.env.get('CRON_SECRET');
+
+    // Allow internal cron callers via shared secret header
+    const incomingCronSecret = req.headers.get('x-cron-secret');
+    const isCronCaller = !!cronSecret && incomingCronSecret === cronSecret;
+
+    if (!isCronCaller) {
+      // Otherwise require a valid user JWT with a privileged role
+      const authHeader = req.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const token = authHeader.replace('Bearer ', '');
+      const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
+      if (claimsError || !claimsData?.claims?.sub) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      const userId = claimsData.claims.sub;
+      // Check role via service client
+      const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+      const { data: roleRows } = await adminClient
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId);
+      const roles = (roleRows || []).map((r: any) => r.role);
+      const allowed = roles.some((r: string) =>
+        ['super_admin', 'admin', 'sales', 'warehouse', 'finance', 'purchasing'].includes(r)
+      );
+      if (!allowed) {
+        return new Response(JSON.stringify({ error: 'Forbidden' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
     const serviceAccountJson = Deno.env.get('FIREBASE_SERVICE_ACCOUNT_JSON');
 
     if (!serviceAccountJson) {

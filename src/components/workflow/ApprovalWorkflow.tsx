@@ -266,12 +266,12 @@ export function ApprovalInfo({
       
       const { data } = await supabase
         .from('profiles')
-        .select('full_name, email')
+        .select('full_name')
         .eq('id', approvedBy)
         .single();
       
       if (data) {
-        setApproverName(data.full_name || data.email);
+        setApproverName(data.full_name || '');
       }
     };
 
