@@ -2071,6 +2071,14 @@ export type Database = {
         Args: { p_reason: string; p_stock_out_id: string }
         Returns: Json
       }
+      stock_out_undo_delivery: {
+        Args: {
+          p_delivery_request_id?: string
+          p_reason: string
+          p_stock_out_id: string
+        }
+        Returns: Json
+      }
       validate_adjustment_quantity: { Args: { qty: number }; Returns: boolean }
       validate_date_range: {
         Args: { end_date: string; start_date: string }
