@@ -123,6 +123,11 @@ function renderAssistantContent(text: string, onNavigate: (path: string) => void
   return parts;
 }
 
+async function getAuthToken(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? null;
+}
+
 export default function WmsAssistant() {
   const { language } = useLanguage();
   const location = useLocation();
@@ -325,11 +330,13 @@ export default function WmsAssistant() {
           },
           ...attachments.map((a) => ({ type: "image_url", image_url: { url: a.dataUrl } })),
         ];
+        const classifyToken = await getAuthToken();
+        if (!classifyToken) return;
         const resp = await fetch(CHAT_URL, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            Authorization: `Bearer ${classifyToken}`,
           },
           body: JSON.stringify({ mode: "classify", messages: [{ role: "user", content: parts }] }),
         });
@@ -397,17 +404,26 @@ export default function WmsAssistant() {
     };
 
     try {
+      const token = await getAuthToken();
+      if (!token) {
+        toast.error(language === "en" ? "Session expired. Please sign in again." : "Sesi habis. Silakan login ulang.");
+        setIsLoading(false);
+        return;
+      }
+
       const resp = await fetch(CHAT_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ messages: payload }),
       });
 
       if (!resp.ok) {
-        if (resp.status === 429) {
+        if (resp.status === 401) {
+          toast.error(language === "en" ? "Session expired. Please sign in again." : "Sesi habis. Silakan login ulang.");
+        } else if (resp.status === 429) {
           toast.error(language === "en" ? "Rate limit reached. Try again shortly." : "Rate limit tercapai. Coba lagi sebentar.");
         } else if (resp.status === 402) {
           toast.error(language === "en" ? "AI credits exhausted." : "Kredit AI habis.");
