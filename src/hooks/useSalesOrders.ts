@@ -420,6 +420,7 @@ export async function updateSalesOrder(
 
     // Sync ke Sales Pulse jika SO sudah pernah di-approve (so_number sudah ada di CRM)
     if (result.success) {
+      await logSoActivityToDeliveryCards(orderId, '✏️ Sales Order diupdate (data SO berubah).');
       try {
         await syncSalesOrderUpdatedFromDb(orderId);
       } catch (syncErr) {
@@ -607,7 +608,11 @@ export async function requestSalesOrderRevision(orderId: string, reason: string)
   try {
     const { data, error } = await supabase.rpc('sales_order_request_revision', { order_id: orderId, revision_reason: reason });
     if (error) throw error;
-    return data as { success: boolean; error?: string };
+    const result = data as { success: boolean; error?: string };
+    if (result.success) {
+      await logSoActivityToDeliveryCards(orderId, `📝 Revisi SO diminta. Alasan: ${reason}`);
+    }
+    return result;
   } catch (error: unknown) {
     return { success: false, error: error instanceof Error ? error.message : 'Failed to request revision' };
   }
@@ -622,6 +627,7 @@ export async function approveSalesOrderRevision(orderId: string): Promise<{ succ
 
     // Sync revisi yang sudah di-approve ke Sales Pulse
     if (result.success) {
+      await logSoActivityToDeliveryCards(orderId, '✅ Revisi SO disetujui.');
       try {
         await syncSalesOrderUpdatedFromDb(orderId);
       } catch (syncErr) {
@@ -640,7 +646,11 @@ export async function rejectSalesOrderRevision(orderId: string, reason?: string)
   try {
     const { data, error } = await supabase.rpc('sales_order_reject_revision', { order_id: orderId, reject_reason: reason || null });
     if (error) throw error;
-    return data as { success: boolean; error?: string };
+    const result = data as { success: boolean; error?: string };
+    if (result.success) {
+      await logSoActivityToDeliveryCards(orderId, `❌ Revisi SO ditolak${reason ? `. Alasan: ${reason}` : '.'}`);
+    }
+    return result;
   } catch (error: unknown) {
     return { success: false, error: error instanceof Error ? error.message : 'Failed to reject revision' };
   }
