@@ -198,6 +198,11 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
   const [doNoteText, setDoNoteText] = useState("");
   const [pendingDOGenerate, setPendingDOGenerate] = useState<{ id: string; stock_out_number: string; delivery_date: string } | null>(null);
 
+  // Undo delivery state
+  const [undoDeliveryOpen, setUndoDeliveryOpen] = useState(false);
+  const [undoReason, setUndoReason] = useState("");
+  const [undoing, setUndoing] = useState(false);
+
   const handleGenerateDO = async (so: { id: string; stock_out_number: string; delivery_date: string }) => {
     if (!card) return;
     setLoadingDOPreview(so.id);
@@ -1238,6 +1243,63 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
       toast.error("Gagal menyimpan data DO: " + err.message);
     } finally {
       setSavingDO(false);
+    }
+  };
+
+  // Undo delivery handler
+  const handleUndoDelivery = async () => {
+    if (!user || !card || undoing) return;
+    const reason = undoReason.trim();
+    if (reason.length < 20) {
+      toast.error("Alasan harus minimal 20 karakter");
+      return;
+    }
+    setUndoing(true);
+    try {
+      // Ambil semua stock_out yang sudah delivered untuk SO ini
+      const { data: deliveredSOs, error: fetchErr } = await supabase
+        .from("stock_out_headers")
+        .select("id, stock_out_number")
+        .eq("sales_order_id", card.sales_order_id)
+        .eq("booking_status", "delivered")
+        .eq("skip_stock_deduction", false);
+
+      if (fetchErr) throw fetchErr;
+      if (!deliveredSOs || deliveredSOs.length === 0) {
+        toast.error("Tidak ada pengiriman yang bisa di-undo");
+        return;
+      }
+
+      let lastResult: any = null;
+      for (const so of deliveredSOs) {
+        const { data, error } = await supabase.rpc("stock_out_undo_delivery", {
+          p_stock_out_id: so.id,
+          p_reason: reason,
+          p_delivery_request_id: card.id,
+        });
+        if (error) throw error;
+        lastResult = data;
+        if (!lastResult?.success) {
+          throw new Error(lastResult?.error || "Undo gagal");
+        }
+      }
+
+      // Tambah komentar aktivitas
+      await supabase.from("delivery_comments").insert({
+        delivery_request_id: card.id,
+        user_id: user.id,
+        message: `↩️ Pengiriman dibatalkan (undo). Card dikembalikan ke Approval Delivery Order. Alasan: ${reason}`,
+        type: "activity",
+      });
+
+      toast.success("Pengiriman berhasil di-undo. Card kembali ke Approval Delivery Order.");
+      setUndoDeliveryOpen(false);
+      setUndoReason("");
+      onClose();
+    } catch (err: any) {
+      toast.error("Gagal undo pengiriman: " + (err.message || String(err)));
+    } finally {
+      setUndoing(false);
     }
   };
 
@@ -2419,6 +2481,25 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
                        ))}
                      </div>
                    )}
+
+                   {/* Undo Delivery - only in pengiriman columns, super_admin/admin only */}
+                   {PENGIRIMAN_COLUMNS.includes(card.board_status) && isAdmin && (
+                     <div className="mt-3 pt-3 border-t">
+                       <Button
+                         variant="outline"
+                         size="sm"
+                         className="w-full h-8 text-xs gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                         onClick={() => setUndoDeliveryOpen(true)}
+                         disabled={undoing}
+                       >
+                         <RotateCcw className="h-3.5 w-3.5" />
+                         Batalkan Pengiriman (Undo)
+                       </Button>
+                       <p className="text-[10px] text-muted-foreground mt-1 text-center">
+                         Stok kembali & card ke Approval Delivery Order
+                       </p>
+                     </div>
+                   )}
                 </div>
               )}
             </div>
@@ -3029,6 +3110,60 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
         onOpenChange={setDoPreviewOpen}
         data={doPreviewData}
       />
+
+      {/* Undo Delivery Dialog */}
+      <Dialog open={undoDeliveryOpen} onOpenChange={(v) => { setUndoDeliveryOpen(v); if (!v) setUndoReason(""); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <RotateCcw className="w-4 h-4" />
+              Batalkan Pengiriman (Undo)
+            </DialogTitle>
+            <DialogDescription>
+              Stok yang sudah dikurangi akan <strong>dikembalikan</strong> ke inventori dan card akan kembali ke kolom <strong>Approval Delivery Order</strong>. Tindakan ini hanya berlaku selama card belum dipindahkan ke kolom Delivered.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3 text-xs text-destructive space-y-1">
+              <p className="font-semibold">Yang akan terjadi:</p>
+              <ul className="list-disc pl-4 space-y-0.5">
+                <li>Stok (qty_on_hand) dikembalikan untuk semua batch</li>
+                <li>Status booking menjadi <strong>Booked</strong> kembali</li>
+                <li>qty_delivered SO direcalculate</li>
+                <li>Card kembali ke <strong>Approval Delivery Order</strong></li>
+              </ul>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">
+                Alasan pembatalan <span className="text-muted-foreground">(min. 20 karakter)</span>
+              </label>
+              <Textarea
+                placeholder="Tuliskan alasan pembatalan pengiriman..."
+                value={undoReason}
+                onChange={(e) => setUndoReason(e.target.value)}
+                rows={3}
+                className="text-sm"
+              />
+              <p className={cn("text-[10px]", undoReason.trim().length >= 20 ? "text-green-600" : "text-muted-foreground")}>
+                {undoReason.trim().length}/20 karakter minimum
+              </p>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setUndoDeliveryOpen(false); setUndoReason(""); }} disabled={undoing}>
+              Batal
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleUndoDelivery}
+              disabled={undoing || undoReason.trim().length < 20}
+            >
+              {undoing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RotateCcw className="w-4 h-4 mr-2" />}
+              Konfirmasi Undo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
