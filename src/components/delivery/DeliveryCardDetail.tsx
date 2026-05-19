@@ -332,7 +332,7 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
   const isFinance = user?.role === 'finance';
   const isAdmin = user?.role && ['super_admin', 'admin'].includes(user.role);
   const canCheckChecklist = user?.role && ['super_admin', 'purchasing', 'finance'].includes(user.role);
-  const canDeleteCard = user?.role && ['super_admin', 'finance'].includes(user.role);
+  const canDeleteCard = user?.role && ['super_admin', 'admin', 'finance'].includes(user.role);
 
   // Fetch labels & card labels
   const fetchLabels = useCallback(async () => {
