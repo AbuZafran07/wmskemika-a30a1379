@@ -16,6 +16,28 @@ import {
   validateData 
 } from '@/lib/validationSchemas';
 
+// Log activity to delivery_comments for all delivery cards linked to a SO
+async function logSoActivityToDeliveryCards(orderId: string, message: string) {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data: cards } = await supabase
+      .from('delivery_requests')
+      .select('id')
+      .eq('sales_order_id', orderId);
+    if (!cards || cards.length === 0) return;
+    const rows = cards.map((c: { id: string }) => ({
+      delivery_request_id: c.id,
+      user_id: user.id,
+      message,
+      type: 'activity',
+    }));
+    await supabase.from('delivery_comments').insert(rows);
+  } catch (e) {
+    console.warn('[WMS] Gagal mencatat aktivitas SO ke delivery card:', e);
+  }
+}
+
 export interface SalesOrderHeader {
   id: string;
   sales_order_number: string;
