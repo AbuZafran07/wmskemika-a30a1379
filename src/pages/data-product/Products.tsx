@@ -681,46 +681,45 @@ export default function Products() {
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4 border-t pt-4">
               <div className="space-y-1">
                 <label className="text-sm font-medium">{language === 'en' ? 'Category' : 'Kategori'}</label>
-                <Select value={filterCategory || 'all'} onValueChange={v => setFilterCategory(v === 'all' ? '' : v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={language === 'en' ? 'All categories' : 'Semua kategori'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{language === 'en' ? 'All categories' : 'Semua kategori'}</SelectItem>
-                    {categories.map(c => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={filterCategory || 'all'}
+                  onValueChange={v => setFilterCategory(!v || v === 'all' ? '' : v)}
+                  placeholder={language === 'en' ? 'All categories' : 'Semua kategori'}
+                  searchPlaceholder={language === 'en' ? 'Search category...' : 'Cari kategori...'}
+                  options={[
+                    { value: 'all', label: language === 'en' ? 'All categories' : 'Semua kategori' },
+                    ...categories.map(c => ({ value: c.id, label: c.name })),
+                  ]}
+                />
               </div>
               {canViewSupplier() && (
                 <div className="space-y-1">
                   <label className="text-sm font-medium">Supplier</label>
-                  <Select value={filterSupplier || 'all'} onValueChange={v => setFilterSupplier(v === 'all' ? '' : v)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder={language === 'en' ? 'All suppliers' : 'Semua supplier'} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{language === 'en' ? 'All suppliers' : 'Semua supplier'}</SelectItem>
-                      {suppliers.map(s => (
-                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={filterSupplier || 'all'}
+                    onValueChange={v => setFilterSupplier(!v || v === 'all' ? '' : v)}
+                    placeholder={language === 'en' ? 'All suppliers' : 'Semua supplier'}
+                    searchPlaceholder={language === 'en' ? 'Search supplier...' : 'Cari supplier...'}
+                    options={[
+                      { value: 'all', label: language === 'en' ? 'All suppliers' : 'Semua supplier' },
+                      ...suppliers.map(s => ({ value: s.id, label: s.name })),
+                    ]}
+                  />
                 </div>
               )}
               <div className="space-y-1">
                 <label className="text-sm font-medium">Status</label>
-                <Select value={filterStatus || 'all'} onValueChange={v => setFilterStatus(v === 'all' ? '' : v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={language === 'en' ? 'All status' : 'Semua status'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{language === 'en' ? 'All status' : 'Semua status'}</SelectItem>
-                    <SelectItem value="active">{language === 'en' ? 'Active' : 'Aktif'}</SelectItem>
-                    <SelectItem value="inactive">{language === 'en' ? 'Inactive' : 'Tidak Aktif'}</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={filterStatus || 'all'}
+                  onValueChange={v => setFilterStatus(!v || v === 'all' ? '' : v)}
+                  placeholder={language === 'en' ? 'All status' : 'Semua status'}
+                  searchPlaceholder={language === 'en' ? 'Search status...' : 'Cari status...'}
+                  options={[
+                    { value: 'all', label: language === 'en' ? 'All status' : 'Semua status' },
+                    { value: 'active', label: language === 'en' ? 'Active' : 'Aktif' },
+                    { value: 'inactive', label: language === 'en' ? 'Inactive' : 'Tidak Aktif' },
+                  ]}
+                />
               </div>
               {activeFilterCount > 0 && (
                 <div className="sm:col-span-3 flex justify-end">
