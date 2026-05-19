@@ -3,35 +3,10 @@
 
 import { supabase } from '@/integrations/supabase/client';
 
-const ARAP_ENDPOINT = "https://qekexdtidnbspqzwerrd.supabase.co/functions/v1/wms-sync";
-
-// Cache API key dari settings table
-let cachedApiKey: string | null = null;
-
-async function getApiKey(): Promise<string> {
-  if (cachedApiKey) return cachedApiKey;
-
-  try {
-    const { data } = await supabase
-      .from('settings')
-      .select('value')
-      .eq('key', 'arap_api_key')
-      .single();
-
-    if (data?.value) {
-      cachedApiKey = typeof data.value === 'string' ? data.value : String(data.value);
-      return cachedApiKey;
-    }
-  } catch (err) {
-    console.warn('[AR/AP Sync] Gagal mengambil API key dari settings:', err);
-  }
-
-  return '';
-}
-
-// Reset cache (dipanggil jika key berubah)
+// Reset cache (kept as no-op for backward compatibility).
+// API key sekarang disimpan server-side; tidak ada cache client.
 export function clearApiKeyCache() {
-  cachedApiKey = null;
+  /* no-op: API key is now server-side in the arap-sync-proxy edge function */
 }
 
 interface SyncResult {
@@ -45,30 +20,19 @@ async function sendToArAp(
   action: string,
   data: Record<string, any>
 ): Promise<SyncResult> {
-  const apiKey = await getApiKey();
-  if (!apiKey) {
-    console.warn('[AR/AP Sync] API key belum dikonfigurasi di settings');
-    return { success: false, error: 'API key belum dikonfigurasi' };
-  }
-
   try {
-    const response = await fetch(ARAP_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-      },
-      body: JSON.stringify({ entity, action, data }),
-    });
+    const { data: result, error } = await supabase.functions.invoke(
+      'arap-sync-proxy',
+      { body: { entity, action, data } },
+    );
 
-    const result = await response.json();
-
-    if (!response.ok) {
-      console.error(`[AR/AP Sync] ${entity} failed:`, result);
-      return { success: false, error: result.error || `HTTP ${response.status}` };
+    if (error) {
+      console.error(`[AR/AP Sync] ${entity} failed:`, error);
+      return { success: false, error: error.message || 'Sync failed' };
     }
-
-    console.log(`[AR/AP Sync] ${entity} success:`, result);
+    if (result && result.success === false) {
+      return { success: false, error: result.error || 'Sync failed' };
+    }
     return { success: true, data: result };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Network error';
