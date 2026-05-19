@@ -428,8 +428,9 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
       // Get all stock out headers for this SO
       const { data: stockOuts } = await supabase
         .from("stock_out_headers")
-        .select("id, stock_out_number, delivery_date, delivery_number, delivery_actual_date")
+        .select("id, stock_out_number, delivery_date, delivery_number, delivery_actual_date, booking_status")
         .eq("sales_order_id", card.sales_order_id)
+        .neq("booking_status", "released")
         .order("created_at", { ascending: false });
 
       if (!stockOuts || stockOuts.length === 0) {
