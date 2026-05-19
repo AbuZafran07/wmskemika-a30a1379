@@ -123,9 +123,13 @@ export default function Products() {
   const { categories } = useCategories();
   const { units } = useUnits();
   const { suppliers } = useSuppliers();
-  const { canCreate, canEdit, canDelete, canUpload, canViewPurchasePrice } = usePermissions();
-  
+  const { canCreate, canEdit, canDelete, canUpload, canViewPurchasePrice, canViewSupplier } = usePermissions();
+
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [filterSupplier, setFilterSupplier] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -416,16 +420,21 @@ export default function Products() {
     }).format(value);
   };
 
+  const activeFilterCount = [filterCategory, filterSupplier, filterStatus].filter(Boolean).length;
+
   const filteredProducts = products.filter(product => {
     const q = searchQuery.toLowerCase();
-    return (
+    const matchSearch =
       product.name.toLowerCase().includes(q) ||
       (product.sku && product.sku.toLowerCase().includes(q)) ||
       (product.category?.name && product.category.name.toLowerCase().includes(q)) ||
       (product.category?.code && product.category.code.toLowerCase().includes(q)) ||
       (product.supplier?.name && product.supplier.name.toLowerCase().includes(q)) ||
-      (product.unit?.name && product.unit.name.toLowerCase().includes(q))
-    );
+      (product.unit?.name && product.unit.name.toLowerCase().includes(q));
+    const matchCategory = !filterCategory || product.category_id === filterCategory;
+    const matchSupplier = !filterSupplier || product.supplier_id === filterSupplier;
+    const matchStatus = !filterStatus || (filterStatus === 'active' ? product.is_active : !product.is_active);
+    return matchSearch && matchCategory && matchSupplier && matchStatus;
   });
 
   const {
@@ -655,11 +664,77 @@ export default function Products() {
                 icon={<Search className="w-4 h-4" />}
               />
             </div>
-            <Button variant="outline">
+            <Button
+              variant={showFilterPanel ? 'default' : 'outline'}
+              onClick={() => setShowFilterPanel(v => !v)}
+            >
               <Filter className="w-4 h-4 mr-2" />
               {t('common.filter')}
+              {activeFilterCount > 0 && (
+                <span className="ml-2 bg-primary-foreground text-primary rounded-full text-xs px-1.5">
+                  {activeFilterCount}
+                </span>
+              )}
             </Button>
           </div>
+          {showFilterPanel && (
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4 border-t pt-4">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">{language === 'en' ? 'Category' : 'Kategori'}</label>
+                <Select value={filterCategory || 'all'} onValueChange={v => setFilterCategory(v === 'all' ? '' : v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'en' ? 'All categories' : 'Semua kategori'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{language === 'en' ? 'All categories' : 'Semua kategori'}</SelectItem>
+                    {categories.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {canViewSupplier() && (
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Supplier</label>
+                  <Select value={filterSupplier || 'all'} onValueChange={v => setFilterSupplier(v === 'all' ? '' : v)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={language === 'en' ? 'All suppliers' : 'Semua supplier'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{language === 'en' ? 'All suppliers' : 'Semua supplier'}</SelectItem>
+                      {suppliers.map(s => (
+                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Status</label>
+                <Select value={filterStatus || 'all'} onValueChange={v => setFilterStatus(v === 'all' ? '' : v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'en' ? 'All status' : 'Semua status'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{language === 'en' ? 'All status' : 'Semua status'}</SelectItem>
+                    <SelectItem value="active">{language === 'en' ? 'Active' : 'Aktif'}</SelectItem>
+                    <SelectItem value="inactive">{language === 'en' ? 'Inactive' : 'Tidak Aktif'}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {activeFilterCount > 0 && (
+                <div className="sm:col-span-3 flex justify-end">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { setFilterCategory(''); setFilterSupplier(''); setFilterStatus(''); }}
+                  >
+                    {language === 'en' ? 'Reset filters' : 'Reset filter'}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -679,6 +754,9 @@ export default function Products() {
                   <TableHead>{language === 'en' ? 'Product Name' : 'Nama Produk'}</TableHead>
                   <TableHead>{language === 'en' ? 'Category' : 'Kategori'}</TableHead>
                   <TableHead>{language === 'en' ? 'Unit' : 'Satuan'}</TableHead>
+                  {canViewSupplier() && (
+                    <TableHead>Supplier</TableHead>
+                  )}
                   {canViewPurchasePrice() && (
                     <TableHead className="text-right">{language === 'en' ? 'Purchase Price' : 'Harga Beli'}</TableHead>
                   )}
@@ -690,7 +768,7 @@ export default function Products() {
               <TableBody>
                 {filteredProducts.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={canViewPurchasePrice() ? 9 : 8} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={7 + (canViewSupplier() ? 1 : 0) + (canViewPurchasePrice() ? 1 : 0)} className="text-center py-12 text-muted-foreground">
                       {language === 'en' ? 'No products found' : 'Tidak ada produk ditemukan'}
                     </TableCell>
                   </TableRow>
@@ -718,6 +796,9 @@ export default function Products() {
                       </TableCell>
                       <TableCell>{product.category?.name || '-'}</TableCell>
                       <TableCell>{product.unit?.name || '-'}</TableCell>
+                      {canViewSupplier() && (
+                        <TableCell>{product.supplier?.name || '-'}</TableCell>
+                      )}
                       {canViewPurchasePrice() && (
                         <TableCell className="text-right">{formatCurrency(product.purchase_price)}</TableCell>
                       )}

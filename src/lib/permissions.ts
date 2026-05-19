@@ -365,6 +365,20 @@ export function canViewPurchasePrice(role: UserRole | undefined): boolean {
   return PURCHASE_PRICE_VISIBLE_ROLES.includes(role);
 }
 
+// Supplier info hidden from sales and viewer roles
+export const SUPPLIER_VISIBLE_ROLES: UserRole[] = [
+  'super_admin',
+  'admin',
+  'finance',
+  'purchasing',
+  'warehouse',
+];
+
+export function canViewSupplier(role: UserRole | undefined): boolean {
+  if (!role) return false;
+  return SUPPLIER_VISIBLE_ROLES.includes(role);
+}
+
 // ============================================================================
 // ROUTE PROTECTION
 // ============================================================================

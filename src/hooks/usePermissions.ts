@@ -18,6 +18,7 @@ import {
   isAdminOrAbove,
   isViewer,
   canViewPurchasePrice,
+  canViewSupplier,
   MenuKey,
   ModuleType,
   ActionType,
@@ -69,7 +70,13 @@ export function usePermissions() {
      * Only super_admin, admin, finance, purchasing can see it
      */
     canViewPurchasePrice: () => canViewPurchasePrice(role),
-    
+
+    /**
+     * Check if user can view supplier info
+     * Hidden from sales and viewer roles
+     */
+    canViewSupplier: () => canViewSupplier(role),
+
     /**
      * Get current user role
      */
