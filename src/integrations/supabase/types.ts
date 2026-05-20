@@ -1607,7 +1607,7 @@ export type Database = {
           id: string
           product_id: string
           qty_out: number
-          sales_order_item_id: string
+          sales_order_item_id: string | null
           stock_out_id: string
         }
         Insert: {
@@ -1616,7 +1616,7 @@ export type Database = {
           id?: string
           product_id: string
           qty_out: number
-          sales_order_item_id: string
+          sales_order_item_id?: string | null
           stock_out_id: string
         }
         Update: {
@@ -1625,7 +1625,7 @@ export type Database = {
           id?: string
           product_id?: string
           qty_out?: number
-          sales_order_item_id?: string
+          sales_order_item_id?: string | null
           stock_out_id?: string
         }
         Relationships: [
