@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { syncCustomerToArAp } from '@/lib/arApSync';
 import { syncCustomerToSalesPulse } from '@/lib/salesPulseSync';
-import { Plus, Search, Filter, MoreHorizontal, Edit, Trash2, Loader2, Eye, Download, Upload } from 'lucide-react';
+import { Plus, Search, Filter, MoreHorizontal, Edit, Trash2, Loader2, Eye, Download, Upload, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -118,6 +118,24 @@ export default function Customers() {
   const { canCreate, canEdit, canDelete, canUpload } = usePermissions();
   
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortField, setSortField] = useState<'code' | 'name' | 'customer_type' | 'pic' | 'phone' | 'city' | 'is_active'>('code');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = (field: typeof sortField) => {
+    if (sortField === field) {
+      setSortDir(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDir('asc');
+    }
+  };
+
+  const SortIcon = ({ field }: { field: typeof sortField }) => {
+    if (sortField !== field) return <ArrowUpDown className="w-3 h-3 ml-1 inline opacity-50" />;
+    return sortDir === 'asc'
+      ? <ArrowUp className="w-3 h-3 ml-1 inline" />
+      : <ArrowDown className="w-3 h-3 ml-1 inline" />;
+  };
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
