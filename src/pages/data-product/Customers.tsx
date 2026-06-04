@@ -629,13 +629,27 @@ export default function Customers() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{language === 'en' ? 'Code' : 'Kode'}</TableHead>
-                  <TableHead>{language === 'en' ? 'Name' : 'Nama'}</TableHead>
-                  <TableHead>{language === 'en' ? 'Type' : 'Tipe'}</TableHead>
-                  <TableHead>PIC</TableHead>
-                  <TableHead>{language === 'en' ? 'Phone' : 'Telepon'}</TableHead>
-                  <TableHead>{language === 'en' ? 'City' : 'Kota'}</TableHead>
-                  <TableHead className="text-center">Status</TableHead>
+                  <TableHead className="cursor-pointer select-none hover:text-foreground" onClick={() => handleSort('code')}>
+                    {language === 'en' ? 'Code' : 'Kode'}<SortIcon field="code" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer select-none hover:text-foreground" onClick={() => handleSort('name')}>
+                    {language === 'en' ? 'Name' : 'Nama'}<SortIcon field="name" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer select-none hover:text-foreground" onClick={() => handleSort('customer_type')}>
+                    {language === 'en' ? 'Type' : 'Tipe'}<SortIcon field="customer_type" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer select-none hover:text-foreground" onClick={() => handleSort('pic')}>
+                    PIC<SortIcon field="pic" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer select-none hover:text-foreground" onClick={() => handleSort('phone')}>
+                    {language === 'en' ? 'Phone' : 'Telepon'}<SortIcon field="phone" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer select-none hover:text-foreground" onClick={() => handleSort('city')}>
+                    {language === 'en' ? 'City' : 'Kota'}<SortIcon field="city" />
+                  </TableHead>
+                  <TableHead className="text-center cursor-pointer select-none hover:text-foreground" onClick={() => handleSort('is_active')}>
+                    Status<SortIcon field="is_active" />
+                  </TableHead>
                   <TableHead className="text-right">{t('common.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
