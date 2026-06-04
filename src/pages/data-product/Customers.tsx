@@ -373,10 +373,12 @@ export default function Customers() {
     setIsImporting(false);
   };
 
-  const filteredCustomers = customers.filter(customer =>
-    customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    customer.code.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredCustomers = customers
+    .filter(customer =>
+      customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      customer.code.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' }));
 
   const {
     currentPage,
