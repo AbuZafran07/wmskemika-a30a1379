@@ -552,6 +552,12 @@ export default function RequestDelivery() {
       return;
     }
 
+    // === BLOCK: Cannot move cards INTO delivered / delivered_sample manually ===
+    if (newStatus === "delivered" || newStatus === "delivered_sample") {
+      toast.error("Card tidak dapat dipindahkan secara manual ke Delivered. Gunakan tombol 'Post Delivery' pada detail card agar stok ikut ter-posting.");
+      return;
+    }
+
     // === BLOCK: Cannot move to pengiriman column if that day is a holiday or weekend ===
     if (PENGIRIMAN_COLUMNS.includes(newStatus)) {
       const weekDates = getWeekDates();
