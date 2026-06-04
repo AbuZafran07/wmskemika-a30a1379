@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { syncCustomerToArAp } from '@/lib/arApSync';
 import { syncCustomerToSalesPulse } from '@/lib/salesPulseSync';
-import { Plus, Search, Filter, MoreHorizontal, Edit, Trash2, Loader2, Eye, Download, Upload } from 'lucide-react';
+import { Plus, Search, Filter, MoreHorizontal, Edit, Trash2, Loader2, Eye, Download, Upload, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -118,6 +118,24 @@ export default function Customers() {
   const { canCreate, canEdit, canDelete, canUpload } = usePermissions();
   
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortField, setSortField] = useState<'code' | 'name' | 'customer_type' | 'pic' | 'phone' | 'city' | 'is_active'>('code');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = (field: typeof sortField) => {
+    if (sortField === field) {
+      setSortDir(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDir('asc');
+    }
+  };
+
+  const SortIcon = ({ field }: { field: typeof sortField }) => {
+    if (sortField !== field) return <ArrowUpDown className="w-3 h-3 ml-1 inline opacity-50" />;
+    return sortDir === 'asc'
+      ? <ArrowUp className="w-3 h-3 ml-1 inline" />
+      : <ArrowDown className="w-3 h-3 ml-1 inline" />;
+  };
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -378,7 +396,15 @@ export default function Customers() {
       customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       customer.code.toLowerCase().includes(searchQuery.toLowerCase())
     )
-    .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' }));
+    .sort((a, b) => {
+      const dir = sortDir === 'asc' ? 1 : -1;
+      if (sortField === 'is_active') {
+        return (Number(b.is_active) - Number(a.is_active)) * dir;
+      }
+      const av = (a[sortField] ?? '') as string;
+      const bv = (b[sortField] ?? '') as string;
+      return av.toString().localeCompare(bv.toString(), undefined, { numeric: true, sensitivity: 'base' }) * dir;
+    });
 
   const {
     currentPage,
@@ -603,13 +629,27 @@ export default function Customers() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{language === 'en' ? 'Code' : 'Kode'}</TableHead>
-                  <TableHead>{language === 'en' ? 'Name' : 'Nama'}</TableHead>
-                  <TableHead>{language === 'en' ? 'Type' : 'Tipe'}</TableHead>
-                  <TableHead>PIC</TableHead>
-                  <TableHead>{language === 'en' ? 'Phone' : 'Telepon'}</TableHead>
-                  <TableHead>{language === 'en' ? 'City' : 'Kota'}</TableHead>
-                  <TableHead className="text-center">Status</TableHead>
+                  <TableHead className="cursor-pointer select-none hover:text-foreground" onClick={() => handleSort('code')}>
+                    {language === 'en' ? 'Code' : 'Kode'}<SortIcon field="code" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer select-none hover:text-foreground" onClick={() => handleSort('name')}>
+                    {language === 'en' ? 'Name' : 'Nama'}<SortIcon field="name" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer select-none hover:text-foreground" onClick={() => handleSort('customer_type')}>
+                    {language === 'en' ? 'Type' : 'Tipe'}<SortIcon field="customer_type" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer select-none hover:text-foreground" onClick={() => handleSort('pic')}>
+                    PIC<SortIcon field="pic" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer select-none hover:text-foreground" onClick={() => handleSort('phone')}>
+                    {language === 'en' ? 'Phone' : 'Telepon'}<SortIcon field="phone" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer select-none hover:text-foreground" onClick={() => handleSort('city')}>
+                    {language === 'en' ? 'City' : 'Kota'}<SortIcon field="city" />
+                  </TableHead>
+                  <TableHead className="text-center cursor-pointer select-none hover:text-foreground" onClick={() => handleSort('is_active')}>
+                    Status<SortIcon field="is_active" />
+                  </TableHead>
                   <TableHead className="text-right">{t('common.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
