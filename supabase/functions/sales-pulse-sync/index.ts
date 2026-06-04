@@ -137,6 +137,40 @@ serve(async (req) => {
       return jsonResponse({ error: "Missing action" }, 400);
     }
 
+    // Authorization: enforce role-based access for Sales Pulse sync actions
+    const { data: roleRows, error: roleError } = await adminClient
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId);
+
+    if (roleError) {
+      return jsonResponse({ error: "Failed to verify permissions" }, 500);
+    }
+
+    const userRoles = new Set((roleRows || []).map((r: { role: string }) => r.role));
+    const READ_ROLES = new Set(["super_admin", "admin", "sales", "finance", "purchasing"]);
+    const WRITE_SO_ROLES = new Set(["super_admin", "admin", "sales", "finance"]);
+    const MASTER_DATA_ROLES = new Set(["super_admin", "admin", "purchasing", "finance"]);
+
+    const hasAny = (allowed: Set<string>) => {
+      for (const r of userRoles) if (allowed.has(r)) return true;
+      return false;
+    };
+
+    const actionRoleMap: Record<string, Set<string>> = {
+      "list-open-references": READ_ROLES,
+      "wms-so-approved": WRITE_SO_ROLES,
+      "wms-so-updated": WRITE_SO_ROLES,
+      "wms-so-cancelled": WRITE_SO_ROLES,
+      "wms-customer-upsert": MASTER_DATA_ROLES,
+      "wms-product-upsert": MASTER_DATA_ROLES,
+    };
+
+    const allowedForAction = actionRoleMap[action];
+    if (!allowedForAction || !hasAny(allowedForAction)) {
+      return jsonResponse({ error: "Forbidden" }, 403);
+    }
+
     if (action === "list-open-references") {
       const url = new URL(`${SALES_PULSE_BASE_URL}/list-open-references`);
       const incomingUrl = new URL(req.url);
