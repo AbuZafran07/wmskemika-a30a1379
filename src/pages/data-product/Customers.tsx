@@ -396,7 +396,15 @@ export default function Customers() {
       customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       customer.code.toLowerCase().includes(searchQuery.toLowerCase())
     )
-    .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' }));
+    .sort((a, b) => {
+      const dir = sortDir === 'asc' ? 1 : -1;
+      if (sortField === 'is_active') {
+        return (Number(b.is_active) - Number(a.is_active)) * dir;
+      }
+      const av = (a[sortField] ?? '') as string;
+      const bv = (b[sortField] ?? '') as string;
+      return av.toString().localeCompare(bv.toString(), undefined, { numeric: true, sensitivity: 'base' }) * dir;
+    });
 
   const {
     currentPage,
