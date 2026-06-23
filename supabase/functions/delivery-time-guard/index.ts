@@ -25,6 +25,26 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
 
+    // Read configurable hours from settings (fallback: 15:00 / 10:00 WIB)
+    let onHoldHour = 15;
+    let approvalHour = 10;
+    try {
+      const { data: cfg } = await supabase
+        .from("settings")
+        .select("value")
+        .eq("key", "delivery_time_guard_config")
+        .maybeSingle();
+      const v = (cfg?.value ?? {}) as { on_hold_hour?: number; approval_hour?: number };
+      if (typeof v.on_hold_hour === "number" && v.on_hold_hour >= 0 && v.on_hold_hour <= 23) {
+        onHoldHour = v.on_hold_hour;
+      }
+      if (typeof v.approval_hour === "number" && v.approval_hour >= 0 && v.approval_hour <= 23) {
+        approvalHour = v.approval_hour;
+      }
+    } catch (_) {
+      // ignore, use defaults
+    }
+
     // Get current time in WIB (UTC+7)
     const now = new Date();
     const wibHour = new Date(
@@ -32,7 +52,13 @@ Deno.serve(async (req) => {
     ).getHours();
 
     const body = await req.json().catch(() => ({}));
-    const action = body.action || (wibHour >= 15 || wibHour < 10 ? "to_on_hold" : wibHour >= 10 ? "to_approval" : "none");
+    const action =
+      body.action ||
+      (wibHour >= onHoldHour || wibHour < approvalHour
+        ? "to_on_hold"
+        : wibHour >= approvalHour
+        ? "to_approval"
+        : "none");
 
     let moved = 0;
 
@@ -57,14 +83,14 @@ Deno.serve(async (req) => {
           delivery_request_id: card.id,
           user_id: "00000000-0000-0000-0000-000000000000",
           message:
-            "⏰ Card otomatis dipindahkan ke On Hold Delivery Order (setelah jam 15:00 WIB)",
+            `⏰ Card otomatis dipindahkan ke On Hold Delivery Order (setelah jam ${String(onHoldHour).padStart(2, "0")}:00 WIB)`,
           type: "activity",
         }));
         // Insert comments - ignore errors for system user
         await supabase.from("delivery_comments").insert(comments).select();
       }
 
-      console.log(`[15:00 WIB] Moved ${moved} cards to on_hold_delivery`);
+      console.log(`[${onHoldHour}:00 WIB] Moved ${moved} cards to on_hold_delivery`);
     } else if (action === "to_approval") {
       // After 10:00 WIB: Move all cards from on_hold_delivery → approval_delivery
       const { data, error } = await supabase
@@ -85,17 +111,17 @@ Deno.serve(async (req) => {
           delivery_request_id: card.id,
           user_id: "00000000-0000-0000-0000-000000000000",
           message:
-            "⏰ Card otomatis dipindahkan kembali ke Approval Delivery Order (setelah jam 10:00 WIB)",
+            `⏰ Card otomatis dipindahkan kembali ke Approval Delivery Order (setelah jam ${String(approvalHour).padStart(2, "0")}:00 WIB)`,
           type: "activity",
         }));
         await supabase.from("delivery_comments").insert(comments).select();
       }
 
-      console.log(`[10:00 WIB] Moved ${moved} cards to approval_delivery`);
+      console.log(`[${approvalHour}:00 WIB] Moved ${moved} cards to approval_delivery`);
     }
 
     return new Response(
-      JSON.stringify({ success: true, action, moved }),
+      JSON.stringify({ success: true, action, moved, on_hold_hour: onHoldHour, approval_hour: approvalHour }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
