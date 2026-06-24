@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 
 import { exportSectionBasedPdf } from "@/lib/pdfSectionExport";
+import { ExportPOButton } from "@/components/ExportPOButton";
 
 import { securePrint, printStyles, sanitizeHtml } from "@/lib/printUtils";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -1395,20 +1396,28 @@ export default function PlanOrder() {
           </p>
         </div>
 
-        {canCreate("plan_order") && (
-          <Button
-            onClick={() => {
-              resetForm();
-              generatePlanNumber();
-              setIsFormOpen(true);
-              setIsEditMode(false);
-              setEditingOrderId(null);
-            }}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            {language === "en" ? "Create Plan Order" : "Buat Plan Order"}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <ExportPOButton
+            data={filteredOrders}
+            statusFilter={statusFilter}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+          />
+          {canCreate("plan_order") && (
+            <Button
+              onClick={() => {
+                resetForm();
+                generatePlanNumber();
+                setIsFormOpen(true);
+                setIsEditMode(false);
+                setEditingOrderId(null);
+              }}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              {language === "en" ? "Create Plan Order" : "Buat Plan Order"}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Tabs */}

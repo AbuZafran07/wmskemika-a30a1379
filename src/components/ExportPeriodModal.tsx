@@ -9,16 +9,17 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import type { SalesOrderHeader } from "@/hooks/useSalesOrders";
 import type { DateRange, ExportFormat } from "@/hooks/useExportSO";
 
 interface ExportPeriodModalProps {
   isOpen: boolean;
   format: ExportFormat;
   defaultDateRange: { start: Date; end: Date };
-  allData: SalesOrderHeader[];
+  allData: any[];
+  /** Field name on each record that holds the date string. Default: "order_date" */
+  dateField?: string;
   onClose: () => void;
-  onConfirm: (filteredData: SalesOrderHeader[], period: DateRange) => void;
+  onConfirm: (filteredData: any[], period: DateRange) => void;
 }
 
 // ─── date helpers ─────────────────────────────────────────────────────────────
@@ -55,22 +56,6 @@ function subMonths(date: Date, n: number): Date {
   return new Date(date.getFullYear(), date.getMonth() - n, date.getDate());
 }
 
-// ─── filter helper ────────────────────────────────────────────────────────────
-
-function filterByPeriod(
-  data: SalesOrderHeader[],
-  start: Date | null,
-  end: Date | null
-): SalesOrderHeader[] {
-  if (!start && !end) return data;
-  return data.filter((order) => {
-    const od = midnight(new Date(order.order_date));
-    const matchStart = !start || od >= start;
-    const matchEnd = !end || od <= end;
-    return matchStart && matchEnd;
-  });
-}
-
 // ─── component ────────────────────────────────────────────────────────────────
 
 export function ExportPeriodModal({
@@ -78,6 +63,7 @@ export function ExportPeriodModal({
   format,
   defaultDateRange,
   allData,
+  dateField = "order_date",
   onClose,
   onConfirm,
 }: ExportPeriodModalProps) {
@@ -86,7 +72,6 @@ export function ExportPeriodModal({
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
 
-  // Reset to defaultDateRange whenever modal opens
   useEffect(() => {
     if (isOpen) {
       setStartDate(midnight(defaultDateRange.start));
@@ -94,12 +79,17 @@ export function ExportPeriodModal({
     }
   }, [isOpen, defaultDateRange]);
 
-  const filteredData = useMemo(
-    () => filterByPeriod(allData, startDate, endDate),
-    [allData, startDate, endDate]
-  );
+  const filteredData = useMemo(() => {
+    if (!startDate && !endDate) return allData;
+    return allData.filter((item) => {
+      const od = midnight(new Date(item[dateField]));
+      const matchStart = !startDate || od >= startDate;
+      const matchEnd = !endDate || od <= endDate;
+      return matchStart && matchEnd;
+    });
+  }, [allData, startDate, endDate, dateField]);
 
-  // ─── quick select presets ─────────────────────────────────────────────────
+  // ─── quick select presets ────────────────────────────────────────────────
 
   const presets = [
     { label: "Hari ini", start: today, end: today },
@@ -129,8 +119,6 @@ export function ExportPeriodModal({
     return sMatch && eMatch;
   }
 
-  // ─── confirm ──────────────────────────────────────────────────────────────
-
   function handleConfirm() {
     onConfirm(filteredData, { start: startDate, end: endDate });
   }
@@ -139,7 +127,7 @@ export function ExportPeriodModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Export Sales Order</DialogTitle>
+          <DialogTitle>Export {format === "pdf" ? "PDF" : "Excel"}</DialogTitle>
           <p className="text-sm text-muted-foreground pt-1">
             Format:{" "}
             <span className="font-medium text-foreground">
@@ -193,7 +181,7 @@ export function ExportPeriodModal({
 
           {/* Realtime count */}
           <p className="text-sm text-muted-foreground">
-            <span className="font-semibold text-foreground">{filteredData.length}</span> SO
+            <span className="font-semibold text-foreground">{filteredData.length}</span> data
             ditemukan pada periode ini
           </p>
         </div>
