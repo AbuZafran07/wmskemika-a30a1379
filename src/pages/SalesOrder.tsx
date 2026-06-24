@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 
 import { exportSectionBasedPdf } from "@/lib/pdfSectionExport";
+import { ExportButton } from "@/components/ExportButton";
 
 import { usePermissions } from "@/hooks/usePermissions";
 import { securePrint, printStyles, sanitizeHtml } from "@/lib/printUtils";
@@ -1119,12 +1120,18 @@ export default function SalesOrder() {
             {t("menu.salesOrderSub")} - {language === "en" ? "Manage customer orders" : "Kelola pesanan customer"}
           </p>
         </div>
-        {canCreate("sales_order") && (
-          <Button onClick={handleOpenDialog}>
-            <Plus className="w-4 h-4 mr-2" />
-            {language === "en" ? "Create Sales Order" : "Buat Sales Order"}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <ExportButton
+            data={filteredOrders}
+            filters={{ status: statusFilter, dateFrom, dateTo }}
+          />
+          {canCreate("sales_order") && (
+            <Button onClick={handleOpenDialog}>
+              <Plus className="w-4 h-4 mr-2" />
+              {language === "en" ? "Create Sales Order" : "Buat Sales Order"}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Tabs */}
