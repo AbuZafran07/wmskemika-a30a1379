@@ -1,7 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { ChevronDown, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -18,8 +20,12 @@ interface ExportPeriodModalProps {
   allData: any[];
   /** Field name on each record that holds the date string. Default: "order_date" */
   dateField?: string;
+  /** If provided, shows a Sales multiselect filter above the date picker */
+  salesList?: string[];
+  /** Field name on each record that holds the sales name. Default: "sales_name" */
+  salesField?: string;
   onClose: () => void;
-  onConfirm: (filteredData: any[], period: DateRange) => void;
+  onConfirm: (filteredData: any[], period: DateRange, selectedSales: string[]) => void;
 }
 
 // ─── date helpers ─────────────────────────────────────────────────────────────
@@ -56,7 +62,100 @@ function subMonths(date: Date, n: number): Date {
   return new Date(date.getFullYear(), date.getMonth() - n, date.getDate());
 }
 
-// ─── component ────────────────────────────────────────────────────────────────
+// ─── Sales multiselect ────────────────────────────────────────────────────────
+
+interface SalesMultiSelectProps {
+  salesList: string[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+}
+
+function SalesMultiSelect({ salesList, selected, onChange }: SalesMultiSelectProps) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [open]);
+
+  const allSelected = selected.length === salesList.length;
+  const noneSelected = selected.length === 0;
+
+  const placeholder = noneSelected
+    ? "Pilih Sales..."
+    : allSelected
+    ? "Semua Sales"
+    : `${selected.length} Sales dipilih`;
+
+  function toggleAll() {
+    onChange(allSelected ? [] : [...salesList]);
+  }
+
+  function toggleOne(name: string) {
+    onChange(
+      selected.includes(name) ? selected.filter((s) => s !== name) : [...selected, name]
+    );
+  }
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`flex items-center justify-between w-full px-3 py-2 text-sm border rounded-md bg-white transition-colors hover:border-primary ${
+          noneSelected ? "text-muted-foreground" : "text-foreground"
+        }`}
+      >
+        <span>{placeholder}</span>
+        <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-52 overflow-y-auto">
+          {/* Pilih Semua / Hapus Semua */}
+          <div
+            className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 border-b border-gray-100 sticky top-0 bg-white"
+            onClick={toggleAll}
+          >
+            <Checkbox checked={allSelected} onCheckedChange={toggleAll} id="sales-all" />
+            <label htmlFor="sales-all" className="text-sm font-medium cursor-pointer select-none">
+              {allSelected ? "Hapus Semua" : "Pilih Semua"}
+            </label>
+          </div>
+
+          {salesList.map((name) => (
+            <div
+              key={name}
+              className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50"
+              onClick={() => toggleOne(name)}
+            >
+              <Checkbox
+                checked={selected.includes(name)}
+                onCheckedChange={() => toggleOne(name)}
+                id={`sales-${name}`}
+              />
+              <label
+                htmlFor={`sales-${name}`}
+                className="text-sm cursor-pointer select-none flex-1"
+              >
+                {name}
+              </label>
+              {selected.includes(name) && (
+                <Check className="w-3.5 h-3.5 text-primary shrink-0" />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── main component ───────────────────────────────────────────────────────────
 
 export function ExportPeriodModal({
   isOpen,
@@ -64,6 +163,8 @@ export function ExportPeriodModal({
   defaultDateRange,
   allData,
   dateField = "order_date",
+  salesList,
+  salesField = "sales_name",
   onClose,
   onConfirm,
 }: ExportPeriodModalProps) {
@@ -71,25 +172,59 @@ export function ExportPeriodModal({
 
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
+  const [selectedSales, setSelectedSales] = useState<string[]>([]);
 
+  // Reset state whenever modal opens
   useEffect(() => {
     if (isOpen) {
       setStartDate(midnight(defaultDateRange.start));
       setEndDate(midnight(defaultDateRange.end));
+      setSelectedSales(salesList ? [...salesList] : []);
     }
-  }, [isOpen, defaultDateRange]);
+  }, [isOpen, defaultDateRange, salesList]);
+
+  // ─── filtered data (date + sales) ──────────────────────────────────────────
 
   const filteredData = useMemo(() => {
-    if (!startDate && !endDate) return allData;
-    return allData.filter((item) => {
-      const od = midnight(new Date(item[dateField]));
-      const matchStart = !startDate || od >= startDate;
-      const matchEnd = !endDate || od <= endDate;
-      return matchStart && matchEnd;
-    });
-  }, [allData, startDate, endDate, dateField]);
+    let result = allData;
 
-  // ─── quick select presets ────────────────────────────────────────────────
+    // Date filter
+    if (startDate || endDate) {
+      result = result.filter((item) => {
+        const od = midnight(new Date(item[dateField]));
+        const matchStart = !startDate || od >= startDate;
+        const matchEnd = !endDate || od <= endDate;
+        return matchStart && matchEnd;
+      });
+    }
+
+    // Sales filter (only when salesList is provided and not all selected)
+    if (salesList && selectedSales.length < salesList.length) {
+      result = result.filter((item) => selectedSales.includes(item[salesField]));
+    }
+
+    return result;
+  }, [allData, startDate, endDate, dateField, salesList, selectedSales, salesField]);
+
+  // ─── summary text ───────────────────────────────────────────────────────────
+
+  const summaryText = useMemo(() => {
+    const count = filteredData.length;
+    if (!salesList) return `${count} data ditemukan pada periode ini`;
+
+    const allSalesSelected = selectedSales.length === salesList.length;
+    const salesDesc = allSalesSelected
+      ? "semua sales"
+      : `${selectedSales.length} sales`;
+
+    return `${count} SO ditemukan untuk ${salesDesc} pada periode ini`;
+  }, [filteredData.length, salesList, selectedSales]);
+
+  const isEmpty = filteredData.length === 0;
+  const noneSelected = salesList ? selectedSales.length === 0 : false;
+  const exportDisabled = isEmpty || noneSelected;
+
+  // ─── quick select presets ─────────────────────────────────────────────────
 
   const presets = [
     { label: "Hari ini", start: today, end: today },
@@ -120,7 +255,7 @@ export function ExportPeriodModal({
   }
 
   function handleConfirm() {
-    onConfirm(filteredData, { start: startDate, end: endDate });
+    onConfirm(filteredData, { start: startDate, end: endDate }, selectedSales);
   }
 
   return (
@@ -137,7 +272,19 @@ export function ExportPeriodModal({
         </DialogHeader>
 
         <div className="space-y-4 py-1">
-          {/* Quick select chips */}
+          {/* Sales multiselect — hanya tampil jika salesList disediakan */}
+          {salesList && salesList.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>Sales</Label>
+              <SalesMultiSelect
+                salesList={salesList}
+                selected={selectedSales}
+                onChange={setSelectedSales}
+              />
+            </div>
+          )}
+
+          {/* Periode */}
           <div>
             <Label className="text-xs text-muted-foreground mb-2 block">Pilih cepat</Label>
             <div className="flex flex-wrap gap-2">
@@ -158,7 +305,6 @@ export function ExportPeriodModal({
             </div>
           </div>
 
-          {/* Date range inputs */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Start Date</Label>
@@ -179,10 +325,13 @@ export function ExportPeriodModal({
             </div>
           </div>
 
-          {/* Realtime count */}
-          <p className="text-sm text-muted-foreground">
-            <span className="font-semibold text-foreground">{filteredData.length}</span> data
-            ditemukan pada periode ini
+          {/* Ringkasan realtime */}
+          <p className={`text-sm ${isEmpty ? "text-red-500 font-medium" : "text-muted-foreground"}`}>
+            {isEmpty
+              ? noneSelected
+                ? "Pilih minimal satu sales untuk melanjutkan"
+                : "0 SO ditemukan — coba ubah filter"
+              : summaryText}
           </p>
         </div>
 
@@ -190,7 +339,9 @@ export function ExportPeriodModal({
           <Button variant="outline" onClick={onClose}>
             Batal
           </Button>
-          <Button onClick={handleConfirm}>Export</Button>
+          <Button onClick={handleConfirm} disabled={exportDisabled}>
+            Export
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

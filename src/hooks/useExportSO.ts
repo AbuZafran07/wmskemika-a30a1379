@@ -18,7 +18,7 @@ export interface DateRange {
   end: Date | null;
 }
 
-// ─── helpers ────────────────────────────────────────────────────────────────
+// ─── helpers ─────────────────────────────────────────────────────────────────
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("id-ID", {
@@ -50,19 +50,34 @@ function formatDateFile(): string {
   return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
 }
 
-function buildFilterInfo(status: string, period: DateRange): string {
-  const parts: string[] = [];
-  if (status && status !== "all") {
-    parts.push(`Status: ${status}`);
+interface HeaderInfo {
+  status: string;
+  period: DateRange;
+  selectedSales: string[];
+  allSalesCount: number;
+}
+
+function buildHeaderLines(info: HeaderInfo): string[] {
+  const lines: string[] = [];
+
+  const periodParts: string[] = [];
+  if (info.status && info.status !== "all") periodParts.push(`Status: ${info.status}`);
+  if (info.period.start && info.period.end) {
+    periodParts.push(`Periode: ${formatDateObj(info.period.start)} - ${formatDateObj(info.period.end)}`);
+  } else if (info.period.start) {
+    periodParts.push(`Dari: ${formatDateObj(info.period.start)}`);
+  } else if (info.period.end) {
+    periodParts.push(`Sampai: ${formatDateObj(info.period.end)}`);
   }
-  if (period.start && period.end) {
-    parts.push(`Periode: ${formatDateObj(period.start)} - ${formatDateObj(period.end)}`);
-  } else if (period.start) {
-    parts.push(`Dari: ${formatDateObj(period.start)}`);
-  } else if (period.end) {
-    parts.push(`Sampai: ${formatDateObj(period.end)}`);
-  }
-  return parts.join(" | ");
+  if (periodParts.length) lines.push(periodParts.join(" | "));
+
+  const allSalesSelected = info.selectedSales.length === info.allSalesCount || info.allSalesCount === 0;
+  const salesLabel = allSalesSelected
+    ? "Semua Sales"
+    : info.selectedSales.join(", ");
+  lines.push(`Sales: ${salesLabel}`);
+
+  return lines;
 }
 
 function buildRows(data: SalesOrderHeader[]) {
@@ -90,12 +105,18 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
-// ─── private generate functions ──────────────────────────────────────────────
+// ─── private generate functions ───────────────────────────────────────────────
 
-async function generatePDF(data: SalesOrderHeader[], status: string, period: DateRange) {
+async function generatePDF(
+  data: SalesOrderHeader[],
+  status: string,
+  period: DateRange,
+  selectedSales: string[],
+  allSalesCount: number
+) {
   const doc = new jsPDF({ orientation: "landscape", format: "a4" });
   const rows = buildRows(data);
-  const filterInfo = buildFilterInfo(status, period);
+  const headerLines = buildHeaderLines({ status, period, selectedSales, allSalesCount });
   const exportedAt = formatDateObj(new Date());
 
   let y = 14;
@@ -109,9 +130,9 @@ async function generatePDF(data: SalesOrderHeader[], status: string, period: Dat
   doc.text(`Diekspor pada: ${exportedAt}`, 14, y);
   y += 6;
 
-  if (filterInfo) {
-    doc.text(filterInfo, 14, y);
-    y += 6;
+  for (const line of headerLines) {
+    doc.text(line, 14, y);
+    y += 5;
   }
 
   autoTable(doc, {
@@ -152,15 +173,22 @@ async function generatePDF(data: SalesOrderHeader[], status: string, period: Dat
   doc.save(`sales-order-${formatDateFile()}.pdf`);
 }
 
-async function generateExcel(data: SalesOrderHeader[], status: string, period: DateRange) {
+async function generateExcel(
+  data: SalesOrderHeader[],
+  status: string,
+  period: DateRange,
+  selectedSales: string[],
+  allSalesCount: number
+) {
   const rows = buildRows(data);
-  const filterInfo = buildFilterInfo(status, period);
+  const headerLines = buildHeaderLines({ status, period, selectedSales, allSalesCount });
   const exportedAt = formatDateObj(new Date());
 
   const wsData: any[][] = [];
   wsData.push(["Sales Order Report"]);
   wsData.push([`Diekspor pada: ${exportedAt}`]);
-  wsData.push([filterInfo || ""]);
+  // header lines (Periode, Sales)
+  for (const line of headerLines) wsData.push([line]);
   wsData.push([]);
   wsData.push(["No", "SO Number", "Date", "Customer", "Customer PO", "Sales", "Allocation", "Amount", "Status"]);
 
@@ -180,17 +208,23 @@ async function generateExcel(data: SalesOrderHeader[], status: string, period: D
 
   const ws = XLSX.utils.aoa_to_sheet(wsData);
 
+  // Bold title row 1
   if (!ws["A1"]) ws["A1"] = {};
   ws["A1"].s = { font: { bold: true, sz: 14 } };
 
+  // Header row is at row index = 2 (exported at) + headerLines.length + 1 (empty) + 1 = 2 + headerLines.length + 2
+  const headerRowIdx = 1 + headerLines.length + 2; // 0-indexed
+  const headerRowNum = headerRowIdx + 1; // 1-indexed for cell ref
   ["A", "B", "C", "D", "E", "F", "G", "H", "I"].forEach((col) => {
-    const cell = `${col}5`;
+    const cell = `${col}${headerRowNum}`;
     if (!ws[cell]) ws[cell] = {};
     ws[cell].s = { font: { bold: true }, fill: { fgColor: { rgb: "D9D9D9" } } };
   });
 
+  // Format Amount column
+  const dataStartRow = headerRowNum + 1;
   for (let i = 0; i < rows.length; i++) {
-    const cell = `H${6 + i}`;
+    const cell = `H${dataStartRow + i}`;
     if (ws[cell]) ws[cell].z = "#,##0";
   }
 
@@ -212,7 +246,7 @@ async function generateExcel(data: SalesOrderHeader[], status: string, period: D
   XLSX.writeFile(wb, `sales-order-${formatDateFile()}.xlsx`);
 }
 
-// ─── hook ────────────────────────────────────────────────────────────────────
+// ─── hook ─────────────────────────────────────────────────────────────────────
 
 export function useExportSO() {
   const [isExporting, setIsExporting] = useState(false);
@@ -237,7 +271,9 @@ export function useExportSO() {
   async function handleConfirmExport(
     data: SalesOrderHeader[],
     period: DateRange,
-    statusFilter: string
+    statusFilter: string,
+    selectedSales: string[],
+    allSalesCount: number
   ) {
     if (data.length === 0) {
       toast.warning("Tidak ada data untuk diexport");
@@ -250,9 +286,9 @@ export function useExportSO() {
 
     try {
       if (format === "pdf") {
-        await generatePDF(data, statusFilter, period);
+        await generatePDF(data, statusFilter, period, selectedSales, allSalesCount);
       } else if (format === "excel") {
-        await generateExcel(data, statusFilter, period);
+        await generateExcel(data, statusFilter, period, selectedSales, allSalesCount);
       }
       toast.success("File berhasil diunduh", { duration: 3000 });
     } catch {

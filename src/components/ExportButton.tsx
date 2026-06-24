@@ -40,18 +40,21 @@ export function ExportButton({ data, filters }: ExportButtonProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [dropdownOpen]);
 
-  // Compute default date range for the modal:
-  // - If page has active date filters → use those
-  // - Otherwise → first day of current month to today
+  // Default date range: dari filter aktif halaman, atau bulan berjalan
   const defaultDateRange = useMemo(() => {
     const today = midnight(new Date());
     const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-
     return {
       start: filters.dateFrom ? midnight(new Date(filters.dateFrom + "T00:00:00")) : firstOfMonth,
       end: filters.dateTo ? midnight(new Date(filters.dateTo + "T00:00:00")) : today,
     };
   }, [filters.dateFrom, filters.dateTo]);
+
+  // Unique list of sales names from data, sorted A-Z
+  const salesList = useMemo(() => {
+    const names = new Set(data.map((o) => o.sales_name).filter(Boolean));
+    return [...names].sort() as string[];
+  }, [data]);
 
   return (
     <>
@@ -93,9 +96,18 @@ export function ExportButton({ data, filters }: ExportButtonProps) {
           format={selectedFormat}
           defaultDateRange={defaultDateRange}
           allData={data}
+          dateField="order_date"
+          salesList={salesList}
+          salesField="sales_name"
           onClose={closeModal}
-          onConfirm={(filteredData, period) =>
-            handleConfirmExport(filteredData, period, filters.status)
+          onConfirm={(filteredData, period, selectedSales) =>
+            handleConfirmExport(
+              filteredData as SalesOrderHeader[],
+              period,
+              filters.status,
+              selectedSales,
+              salesList.length
+            )
           }
         />
       )}

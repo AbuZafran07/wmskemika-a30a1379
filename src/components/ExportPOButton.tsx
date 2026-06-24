@@ -93,7 +93,7 @@ export function ExportPOButton({ data, statusFilter, dateFrom, dateTo }: ExportP
           allData={data}
           dateField="plan_date"
           onClose={closeModal}
-          onConfirm={(filteredData, period) =>
+          onConfirm={(filteredData, period, _selectedSales) =>
             handleConfirmExport(filteredData as PlanOrderHeader[], period, statusFilter)
           }
         />
