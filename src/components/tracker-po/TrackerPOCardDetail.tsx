@@ -262,8 +262,10 @@ export default function TrackerPOCardDetail({
       .from("plan_order_items")
       .select(`
         id, planned_qty, qty_received,
-        product:products(name),
-        unit:units(name)
+        product:products(
+          id, name, sku,
+          unit:units(name)
+        )
       `)
       .eq("plan_order_id", planOrder.id);
 
@@ -273,7 +275,7 @@ export default function TrackerPOCardDetail({
         product_name: item.product?.name || "-",
         planned_qty: item.planned_qty,
         qty_received: item.qty_received || 0,
-        unit: item.unit?.name || "-",
+        unit: item.product?.unit?.name || "-",
       }))
     );
   }, [planOrder.id]);
