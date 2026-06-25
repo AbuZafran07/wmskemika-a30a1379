@@ -479,7 +479,7 @@ export async function updatePlanOrderStatus(
   }
   // Fallback for other status updates
   try {
-    const updateData: Record<string, unknown> = { status };
+    const updateData: { status: string; approved_by?: string; approved_at?: string } = { status };
     
     if (status === 'approved' && approvedBy) {
       updateData.approved_by = approvedBy;
