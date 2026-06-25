@@ -769,13 +769,15 @@ export default function TrackerPOCardDetail({
 
               {/* Checklist */}
               {checklistKeys.length > 0 && (
-                <section>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">Checklist</h3>
+                <section className="border border-border rounded-lg p-3 bg-card/50">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                    <Check className="w-4 h-4 text-primary" /> Checklist
+                  </h3>
                   <div className="space-y-2">
                     {checklistKeys.map((key) => {
                       const item = checklists.find((c) => c.checklist_key === key);
                       return (
-                        <div key={key} className="flex items-start gap-2">
+                        <div key={key} className="flex items-start gap-2 p-2 rounded-md border border-border bg-background">
                           <Checkbox
                             checked={!!item?.is_checked}
                             disabled={!canToggleChecklist || !!item?.is_checked}
