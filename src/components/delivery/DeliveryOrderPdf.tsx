@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { exportSectionBasedPdf } from '@/lib/pdfSectionExport';
 import { PdfGeneratingOverlay } from '@/components/PdfGeneratingOverlay';
+import { securePrint } from '@/lib/printUtils';
 
 export interface DeliveryOrderData {
   id: string;
@@ -78,29 +79,18 @@ export function DeliveryOrderPdf({ open, onOpenChange, data }: DeliveryOrderPdfP
   };
 
   const handleBrowserPrint = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow || !contentRef.current) return;
-
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Delivery Order - ${doNumber}</title>
-          <style>
-            body { margin: 0; padding: 0; font-family: Arial, sans-serif; color: #111; }
-            table { border-collapse: collapse; width: 100%; }
-            th, td { border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; font-size: 11px; }
-            th { background: #166534 !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            @media print { body { padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; } @page { size: A4; margin: 0; } }
-          </style>
-        </head>
-        <body>${contentRef.current.innerHTML}</body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.onload = () => {
-      printWindow.print();
-      printWindow.close();
-    };
+    if (!contentRef.current) return;
+    securePrint({
+      title: `Delivery Order - ${doNumber}`,
+      styles: `
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; color: #111; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; font-size: 11px; }
+        th { background: #166534 !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        @media print { body { padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; } @page { size: A4; margin: 0; } }
+      `,
+      content: contentRef.current.innerHTML,
+    });
   };
 
   const shipAddress = data.ship_to_address || data.customer_address || '-';
