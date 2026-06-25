@@ -125,7 +125,24 @@ serve(async (req) => {
       throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON not configured');
     }
 
-    const serviceAccount = JSON.parse(serviceAccountJson);
+    let serviceAccount: any;
+    try {
+      serviceAccount = JSON.parse(serviceAccountJson);
+    } catch (_e) {
+      console.error('FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON. Expected the full service account JSON file content, not a password or plain string.');
+      return new Response(JSON.stringify({
+        error: 'FIREBASE_SERVICE_ACCOUNT_JSON secret is invalid. Please paste the FULL Firebase service account JSON (the file content starting with {"type":"service_account",...}), not a password.'
+      }), {
+        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+    if (!serviceAccount?.client_email || !serviceAccount?.private_key || !serviceAccount?.project_id) {
+      return new Response(JSON.stringify({
+        error: 'FIREBASE_SERVICE_ACCOUNT_JSON is missing required fields (client_email, private_key, project_id). Re-upload the full service account JSON.'
+      }), {
+        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { title, body, data, user_ids, exclude_user_id } = await req.json();
