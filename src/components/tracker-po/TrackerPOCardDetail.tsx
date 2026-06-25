@@ -864,15 +864,15 @@ export default function TrackerPOCardDetail({
                           </p>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          {isImage && (
+                          {(isImage || att.mime_type === "application/pdf") && (
                             <Button
                               size="icon"
                               variant="ghost"
                               className="w-7 h-7"
-                              onClick={() => window.open(att.url, "_blank")}
+                              onClick={() => setPreviewAttachment(att)}
                               title="Lihat"
                             >
-                              <ExternalLink className="w-3.5 h-3.5" />
+                              <Eye className="w-3.5 h-3.5" />
                             </Button>
                           )}
                           <Button
