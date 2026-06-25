@@ -79,6 +79,71 @@ export default function TrackerPO() {
   const [detailColumn, setDetailColumn] = useState<"plan_order" | "processing" | "in_stock">("plan_order");
   const [cardMeta, setCardMeta] = useState<CardMetaMap>({});
 
+  // Board background (shared via settings)
+  const [boardBgUrl, setBoardBgUrl] = useState<string>("");
+  const [bgInput, setBgInput] = useState("");
+  const bgFileRef = useRef<HTMLInputElement>(null);
+  const isSuperAdmin = (user as any)?.role === "super_admin";
+
+  const extractBgUrl = (value: unknown): string => {
+    if (!value) return "";
+    if (typeof value === "string") {
+      const raw = value.trim();
+      if (!raw) return "";
+      if (raw.startsWith("{")) {
+        try { return ((JSON.parse(raw) as any).url as string) || ""; } catch { return ""; }
+      }
+      return raw;
+    }
+    if (typeof value === "object") {
+      const url = (value as any).url;
+      return typeof url === "string" ? url : "";
+    }
+    return "";
+  };
+
+  useEffect(() => {
+    supabase
+      .from("settings")
+      .select("id, value")
+      .eq("key", "tracker_po_board_bg")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => setBoardBgUrl(extractBgUrl(data?.value)));
+  }, []);
+
+  const handleSetBg = async (url: string) => {
+    setBoardBgUrl(url);
+    const payload = url ? { url } : null;
+    const { data: existing } = await supabase
+      .from("settings")
+      .select("id")
+      .eq("key", "tracker_po_board_bg")
+      .limit(1)
+      .maybeSingle();
+    const res = existing?.id
+      ? await supabase.from("settings").update({ value: payload, updated_at: new Date().toISOString() }).eq("id", existing.id)
+      : await supabase.from("settings").insert({ key: "tracker_po_board_bg", value: payload });
+    if (res.error) toast.error("Gagal menyimpan background: " + res.error.message);
+    else toast.success(url ? "Background board disimpan" : "Background dihapus");
+  };
+
+  const handleBgFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const fileExt = file.name.split(".").pop();
+      const fileKey = `board-bg/tracker-po-${Date.now()}.${fileExt}`;
+      const { error } = await supabase.storage.from("documents").upload(fileKey, file);
+      if (error) throw error;
+      const { data: urlData } = await supabase.storage.from("documents").createSignedUrl(fileKey, 60 * 60 * 24 * 365);
+      await handleSetBg(urlData?.signedUrl || fileKey);
+    } catch (err: any) {
+      toast.error("Gagal upload background: " + err.message);
+    }
+  };
+
   const handleSetFullView = (val: boolean) => {
     setIsFullView(val);
     localStorage.setItem("tracker_po_full_view", String(val));
