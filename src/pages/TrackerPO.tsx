@@ -377,9 +377,19 @@ export default function TrackerPO() {
   }
 
   return (
-    <div className={`flex flex-col h-full ${isFullView ? "fixed inset-0 z-50 bg-gray-50" : ""}`}>
+    <div
+      className={`flex flex-col h-full relative ${isFullView ? "fixed inset-0 z-50 bg-gray-50" : ""}`}
+      style={boardBgUrl ? {
+        backgroundImage: `url(${boardBgUrl})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+      } : undefined}
+    >
+      {boardBgUrl && <div className="absolute inset-0 bg-background/70 dark:bg-background/80 pointer-events-none z-0" />}
+
       {/* Header */}
-      <div className="px-6 py-4 bg-white border-b flex flex-col gap-3 shrink-0">
+      <div className="px-6 py-4 bg-card/90 backdrop-blur-sm border-b flex flex-col gap-3 shrink-0 relative z-10">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
@@ -389,6 +399,91 @@ export default function TrackerPO() {
             <p className="text-sm text-gray-500">Purchase Order Tracker</p>
           </div>
           <div className="flex items-center gap-2">
+            <TooltipProvider delayDuration={200}>
+              {isSuperAdmin && (
+                <Popover>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="icon" className="h-8 w-8">
+                          <ImageIcon className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Background</p></TooltipContent>
+                  </Tooltip>
+                  <PopoverContent className="w-80" align="end">
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium">Ganti Background Board</p>
+                      <div className="space-y-2">
+                        <label className="text-xs text-muted-foreground font-medium">Pilih Preset:</label>
+                        <div className="grid grid-cols-4 gap-2">
+                          {[
+                            { label: "Default", value: "", preview: "bg-muted" },
+                            { label: "Warehouse", value: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=1920&q=80", preview: "bg-amber-800" },
+                            { label: "City", value: "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=1920&q=80", preview: "bg-slate-700" },
+                            { label: "Ocean", value: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1920&q=80", preview: "bg-cyan-600" },
+                            { label: "Forest", value: "https://images.unsplash.com/photo-1448375240586-882707db888b?w=1920&q=80", preview: "bg-emerald-800" },
+                            { label: "Sunset", value: "https://images.unsplash.com/photo-1495616811223-4d98c6e9c869?w=1920&q=80", preview: "bg-orange-600" },
+                            { label: "Night", value: "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1920&q=80", preview: "bg-indigo-900" },
+                            { label: "Abstract", value: "https://images.unsplash.com/photo-1557682250-33bd709cbe85?w=1920&q=80", preview: "bg-purple-700" },
+                          ].map((preset) => (
+                            <button
+                              key={preset.label}
+                              onClick={() => handleSetBg(preset.value)}
+                              className={cn(
+                                "flex flex-col items-center gap-1 p-1.5 rounded-lg border transition-all hover:scale-105",
+                                boardBgUrl === preset.value
+                                  ? "border-primary ring-2 ring-primary/30"
+                                  : "border-border hover:border-primary/50"
+                              )}
+                            >
+                              <div className={cn("w-full h-8 rounded", preset.preview)}
+                                style={preset.value ? {
+                                  backgroundImage: `url(${preset.value})`,
+                                  backgroundSize: "cover",
+                                  backgroundPosition: "center",
+                                } : undefined}
+                              />
+                              <span className="text-[10px] text-muted-foreground truncate w-full text-center">{preset.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="border-t pt-3 space-y-2">
+                        <label className="text-xs text-muted-foreground font-medium">Upload gambar:</label>
+                        <input
+                          ref={bgFileRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleBgFile}
+                          className="block w-full text-xs file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-primary file:text-primary-foreground cursor-pointer"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs text-muted-foreground font-medium">Atau URL gambar:</label>
+                        <div className="flex gap-1">
+                          <Input
+                            value={bgInput}
+                            onChange={(e) => setBgInput(e.target.value)}
+                            placeholder="https://..."
+                            className="text-xs h-8"
+                          />
+                          <Button size="sm" className="h-8" onClick={() => { handleSetBg(bgInput); setBgInput(""); }}>
+                            Set
+                          </Button>
+                        </div>
+                      </div>
+                      {boardBgUrl && (
+                        <Button variant="destructive" size="sm" className="w-full" onClick={() => handleSetBg("")}>
+                          <X className="h-3 w-3 mr-1" /> Hapus Background
+                        </Button>
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+            </TooltipProvider>
             <Button
               variant="ghost"
               size="icon"
@@ -443,7 +538,7 @@ export default function TrackerPO() {
       </div>
 
       {/* Board */}
-      <div className="flex-1 overflow-x-auto p-4">
+      <div className="flex-1 overflow-x-auto p-4 relative z-10">
         {loading ? (
           <div className="flex items-center justify-center h-64 text-gray-500">Memuat data...</div>
         ) : (
@@ -463,7 +558,7 @@ export default function TrackerPO() {
                   </div>
 
                   {/* Cards */}
-                  <div className="flex-1 bg-gray-100 rounded-b-lg p-2 space-y-2 overflow-y-auto min-h-0 max-h-[calc(100vh-200px)]">
+                  <div className="flex-1 bg-gray-100/90 backdrop-blur-sm rounded-b-lg p-2 space-y-2 overflow-y-auto min-h-0 max-h-[calc(100vh-200px)]">
                     {colCards.length === 0 ? (
                       <p className="text-xs text-gray-400 text-center py-4">Tidak ada PO</p>
                     ) : (
