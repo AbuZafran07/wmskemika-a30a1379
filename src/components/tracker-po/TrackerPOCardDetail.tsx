@@ -852,7 +852,9 @@ export default function TrackerPOCardDetail({
                 <div className="space-y-2">
                   {attachments.map((att) => {
                     const name = getDisplayFileName(att);
-                    const isImage = att.mime_type?.startsWith("image/");
+                    const nameLower = name.toLowerCase();
+                    const isImage = att.mime_type?.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(nameLower);
+                    const isPdf = att.mime_type === "application/pdf" || nameLower.endsWith(".pdf");
                     return (
                       <div key={att.id} className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg">
                         {isImage ? <Image className="w-4 h-4 text-primary shrink-0" /> : <FileText className="w-4 h-4 text-muted-foreground shrink-0" />}
@@ -864,7 +866,7 @@ export default function TrackerPOCardDetail({
                           </p>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          {(isImage || att.mime_type === "application/pdf") && (
+                          {(isImage || isPdf) && (
                             <Button
                               size="icon"
                               variant="ghost"
