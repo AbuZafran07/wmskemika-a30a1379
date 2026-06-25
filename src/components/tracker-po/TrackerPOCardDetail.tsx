@@ -15,7 +15,9 @@ import { toast } from "sonner";
 import {
   Tag, MessageSquare, Send, X, Plus, Trash2, Paperclip,
   FileText, Image, Download, Loader2, Check, Search, ExternalLink,
+  Truck, AtSign,
 } from "lucide-react";
+import { DialogFooter } from "@/components/ui/dialog";
 import { format, formatDistanceToNow } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 import { notifyKanbanComment, notifyKanbanMention } from "@/lib/pushNotifications";
