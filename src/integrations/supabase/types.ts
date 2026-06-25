@@ -755,6 +755,165 @@ export type Database = {
           },
         ]
       }
+      po_tracker_card_labels: {
+        Row: {
+          created_at: string
+          id: string
+          label_id: string
+          plan_order_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label_id: string
+          plan_order_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label_id?: string
+          plan_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "po_tracker_card_labels_label_id_fkey"
+            columns: ["label_id"]
+            isOneToOne: false
+            referencedRelation: "po_tracker_labels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_tracker_card_labels_plan_order_id_fkey"
+            columns: ["plan_order_id"]
+            isOneToOne: false
+            referencedRelation: "plan_order_headers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      po_tracker_checklists: {
+        Row: {
+          checked_at: string | null
+          checked_by: string | null
+          checklist_key: string
+          id: string
+          is_checked: boolean
+          plan_order_id: string
+        }
+        Insert: {
+          checked_at?: string | null
+          checked_by?: string | null
+          checklist_key: string
+          id?: string
+          is_checked?: boolean
+          plan_order_id: string
+        }
+        Update: {
+          checked_at?: string | null
+          checked_by?: string | null
+          checklist_key?: string
+          id?: string
+          is_checked?: boolean
+          plan_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "po_tracker_checklists_plan_order_id_fkey"
+            columns: ["plan_order_id"]
+            isOneToOne: false
+            referencedRelation: "plan_order_headers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      po_tracker_comment_reads: {
+        Row: {
+          id: string
+          last_read_at: string
+          plan_order_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          last_read_at?: string
+          plan_order_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          last_read_at?: string
+          plan_order_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "po_tracker_comment_reads_plan_order_id_fkey"
+            columns: ["plan_order_id"]
+            isOneToOne: false
+            referencedRelation: "plan_order_headers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      po_tracker_comments: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          plan_order_id: string
+          type: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          plan_order_id: string
+          type?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          plan_order_id?: string
+          type?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "po_tracker_comments_plan_order_id_fkey"
+            columns: ["plan_order_id"]
+            isOneToOne: false
+            referencedRelation: "plan_order_headers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      po_tracker_labels: {
+        Row: {
+          color: string
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           barcode: string | null
