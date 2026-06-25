@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
   Tag, MessageSquare, Send, X, Plus, Trash2, Paperclip,
-  FileText, Image, Download, Loader2, Check, Search, ExternalLink,
+  FileText, Image, Download, Loader2, Check, Search, ExternalLink, Eye,
   Truck, AtSign,
 } from "lucide-react";
 import { DialogFooter } from "@/components/ui/dialog";
@@ -166,6 +166,7 @@ export default function TrackerPOCardDetail({
 
   // Attachments state
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -863,15 +864,15 @@ export default function TrackerPOCardDetail({
                           </p>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          {isImage && (
+                          {(isImage || att.mime_type === "application/pdf") && (
                             <Button
                               size="icon"
                               variant="ghost"
                               className="w-7 h-7"
-                              onClick={() => window.open(att.url, "_blank")}
+                              onClick={() => setPreviewAttachment(att)}
                               title="Lihat"
                             >
-                              <ExternalLink className="w-3.5 h-3.5" />
+                              <Eye className="w-3.5 h-3.5" />
                             </Button>
                           )}
                           <Button
@@ -1035,6 +1036,29 @@ export default function TrackerPOCardDetail({
           <Button variant="secondary" size="sm" onClick={onClose} className="sm:ml-auto">Tutup</Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Attachment Preview Dialog */}
+      <Dialog open={!!previewAttachment} onOpenChange={(open) => !open && setPreviewAttachment(null)}>
+        <DialogContent className="max-w-5xl max-h-[92vh] p-0 overflow-hidden flex flex-col">
+          <DialogHeader className="px-4 py-3 border-b">
+            <DialogTitle className="flex items-center justify-between pr-8 gap-2">
+              <span className="truncate text-sm">{previewAttachment ? getDisplayFileName(previewAttachment) : ""}</span>
+              {previewAttachment && (
+                <Button size="sm" variant="outline" className="gap-1 shrink-0" onClick={() => window.open(previewAttachment.url, "_blank", "noopener,noreferrer")}>
+                  <ExternalLink className="w-3.5 h-3.5" /> Buka di tab baru
+                </Button>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto bg-muted/30 flex items-center justify-center">
+            {previewAttachment?.mime_type?.startsWith("image/") ? (
+              <img src={previewAttachment.url} alt={getDisplayFileName(previewAttachment)} className="max-w-full max-h-[80vh] object-contain" />
+            ) : previewAttachment?.mime_type === "application/pdf" ? (
+              <iframe src={previewAttachment.url} title={getDisplayFileName(previewAttachment)} className="w-full h-[80vh] border-0 bg-white" />
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
