@@ -1162,10 +1162,9 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
     }
     setSavingDO(true);
     try {
-      const updateData: Record<string, any> = { delivery_number: doNumber, delivery_actual_date: doDate };
       const { error } = await supabase
         .from("stock_out_headers")
-        .update(updateData)
+        .update({ delivery_number: doNumber, delivery_actual_date: doDate })
         .eq("id", stockOutId);
       if (error) throw error;
 
