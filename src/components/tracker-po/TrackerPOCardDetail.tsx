@@ -852,7 +852,9 @@ export default function TrackerPOCardDetail({
                 <div className="space-y-2">
                   {attachments.map((att) => {
                     const name = getDisplayFileName(att);
-                    const isImage = att.mime_type?.startsWith("image/");
+                    const nameLower = name.toLowerCase();
+                    const isImage = att.mime_type?.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(nameLower);
+                    const isPdf = att.mime_type === "application/pdf" || nameLower.endsWith(".pdf");
                     return (
                       <div key={att.id} className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg">
                         {isImage ? <Image className="w-4 h-4 text-primary shrink-0" /> : <FileText className="w-4 h-4 text-muted-foreground shrink-0" />}
@@ -864,7 +866,7 @@ export default function TrackerPOCardDetail({
                           </p>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          {(isImage || att.mime_type === "application/pdf") && (
+                          {(isImage || isPdf) && (
                             <Button
                               size="icon"
                               variant="ghost"
@@ -1051,11 +1053,15 @@ export default function TrackerPOCardDetail({
             </DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-auto bg-muted/30 flex items-center justify-center">
-            {previewAttachment?.mime_type?.startsWith("image/") ? (
-              <img src={previewAttachment.url} alt={getDisplayFileName(previewAttachment)} className="max-w-full max-h-[80vh] object-contain" />
-            ) : previewAttachment?.mime_type === "application/pdf" ? (
-              <iframe src={previewAttachment.url} title={getDisplayFileName(previewAttachment)} className="w-full h-[80vh] border-0 bg-white" />
-            ) : null}
+            {(() => {
+              if (!previewAttachment) return null;
+              const n = getDisplayFileName(previewAttachment).toLowerCase();
+              const isImg = previewAttachment.mime_type?.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(n);
+              const isPdf = previewAttachment.mime_type === "application/pdf" || n.endsWith(".pdf");
+              if (isImg) return <img src={previewAttachment.url} alt={getDisplayFileName(previewAttachment)} className="max-w-full max-h-[80vh] object-contain" />;
+              if (isPdf) return <iframe src={previewAttachment.url} title={getDisplayFileName(previewAttachment)} className="w-full h-[80vh] border-0 bg-white" />;
+              return null;
+            })()}
           </div>
         </DialogContent>
       </Dialog>
