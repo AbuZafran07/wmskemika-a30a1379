@@ -87,6 +87,7 @@ import {
 
 import { useSettings } from "@/hooks/usePlanOrders";
 import { useCustomers, useProducts } from "@/hooks/useMasterData";
+import { useSalesUsers } from "@/hooks/useSalesUsers";
 import { uploadFile, getSignedUrl } from "@/lib/storage";
 import { usePagination } from "@/hooks/usePagination";
 import { DataTablePagination } from "@/components/DataTablePagination";
@@ -166,6 +167,7 @@ export default function SalesOrder() {
   const { customers } = useCustomers();
   const { products } = useProducts();
   const { allowAdminApprove } = useSettings();
+  const { salesUsers } = useSalesUsers();
 
   // RBAC Permissions
   const { canCreate, canEdit, canDelete, canCancel, canApproveOrder, isAdminOrAbove } = usePermissions();
@@ -1474,7 +1476,18 @@ export default function SalesOrder() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <Label>{language === "en" ? "Sales Name" : "Nama Sales"} *</Label>
-                <Input value={salesName} onChange={(e) => setSalesName(e.target.value)} />
+                <SearchableSelect
+                  value={salesName}
+                  onValueChange={setSalesName}
+                  options={salesUsers.map((u) => ({
+                    value: u.full_name,
+                    label: u.full_name,
+                    description: u.email,
+                  }))}
+                  placeholder={language === "en" ? "Select sales..." : "Pilih sales..."}
+                  searchPlaceholder={language === "en" ? "Search sales..." : "Cari sales..."}
+                  emptyMessage={language === "en" ? "No sales found" : "Sales tidak ditemukan"}
+                />
               </div>
 
               <div className="space-y-2">
