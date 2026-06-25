@@ -295,6 +295,19 @@ export default function SalesOrder() {
 
   const hasActiveFilters = statusFilter !== "all" || !!dateFrom || !!dateTo;
 
+  // Data untuk export: tidak difilter by viewMode/tab agar SO archived juga ikut ter-export.
+  // Filtering date & sales dilakukan di ExportPeriodModal.
+  const exportableOrders = useMemo(() => {
+    return salesOrders.filter((order) => {
+      const matchesSearch =
+        order.sales_order_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (order.customer?.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+        order.customer_po_number.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesStatus = statusFilter === "all" || order.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [salesOrders, searchQuery, statusFilter]);
+
   // Pagination
   const {
     currentPage,
@@ -1124,7 +1137,7 @@ export default function SalesOrder() {
         </div>
         <div className="flex items-center gap-2">
           <ExportButton
-            data={filteredOrders}
+            data={exportableOrders}
             filters={{ status: statusFilter, dateFrom, dateTo }}
           />
           {canCreate("sales_order") && (
