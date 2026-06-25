@@ -1053,11 +1053,15 @@ export default function TrackerPOCardDetail({
             </DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-auto bg-muted/30 flex items-center justify-center">
-            {previewAttachment?.mime_type?.startsWith("image/") ? (
-              <img src={previewAttachment.url} alt={getDisplayFileName(previewAttachment)} className="max-w-full max-h-[80vh] object-contain" />
-            ) : previewAttachment?.mime_type === "application/pdf" ? (
-              <iframe src={previewAttachment.url} title={getDisplayFileName(previewAttachment)} className="w-full h-[80vh] border-0 bg-white" />
-            ) : null}
+            {(() => {
+              if (!previewAttachment) return null;
+              const n = getDisplayFileName(previewAttachment).toLowerCase();
+              const isImg = previewAttachment.mime_type?.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(n);
+              const isPdf = previewAttachment.mime_type === "application/pdf" || n.endsWith(".pdf");
+              if (isImg) return <img src={previewAttachment.url} alt={getDisplayFileName(previewAttachment)} className="max-w-full max-h-[80vh] object-contain" />;
+              if (isPdf) return <iframe src={previewAttachment.url} title={getDisplayFileName(previewAttachment)} className="w-full h-[80vh] border-0 bg-white" />;
+              return null;
+            })()}
           </div>
         </DialogContent>
       </Dialog>
