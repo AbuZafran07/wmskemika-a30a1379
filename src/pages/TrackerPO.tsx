@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
@@ -6,7 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Maximize2, Minimize2, ZoomIn, ZoomOut, MessageSquare, Paperclip, ClipboardCheck, AlertTriangle } from "lucide-react";
+import { Search, Maximize2, Minimize2, ZoomIn, ZoomOut, MessageSquare, Paperclip, ClipboardCheck, AlertTriangle, Image as ImageIcon, X } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { format, formatDistanceToNow, isPast, differenceInDays } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 import { useTrackerPO, type ChecklistItem } from "@/hooks/useTrackerPO";
