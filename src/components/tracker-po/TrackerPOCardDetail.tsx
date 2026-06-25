@@ -404,11 +404,7 @@ export default function TrackerPOCardDetail({
   // ─── comment handlers ─────────────────────────────────────────────────────
 
   const handleCommentKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (showMentionList) {
-      if (e.key === "Escape") { setShowMentionList(false); return; }
-      return;
-    }
-    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+    if (e.key === "Enter" && !e.shiftKey && !showMentionList) {
       e.preventDefault();
       sendComment();
     }
@@ -442,17 +438,24 @@ export default function TrackerPOCardDetail({
     if (!newComment.trim() || !user) return;
     setSendingComment(true);
     const text = newComment.trim();
+
+    const { error } = await supabase.from("po_tracker_comments").insert({
+      plan_order_id: planOrder.id,
+      user_id: user.id,
+      message: text,
+      type: "comment",
+    });
+
+    if (error) {
+      toast.error("Gagal mengirim komentar");
+      setSendingComment(false);
+      return;
+    }
+
     setNewComment("");
     setShowMentionList(false);
 
     try {
-      await supabase.from("po_tracker_comments").insert({
-        plan_order_id: planOrder.id,
-        user_id: user.id,
-        message: text,
-        type: "comment",
-      });
-
       const senderName = (user as any).name || (user as any).email || "User";
       notifyKanbanComment(planOrder.plan_number, senderName, text, planOrder.id, user.id);
 
@@ -1003,7 +1006,7 @@ export default function TrackerPOCardDetail({
                     value={newComment}
                     onChange={handleCommentChange}
                     onKeyDown={handleCommentKeyDown}
-                    placeholder="Tulis komentar... (Ctrl+Enter)"
+                    placeholder="Tulis komentar... (ketik @ untuk mention)"
                     className="flex-1 min-h-[60px] max-h-32 text-sm resize-none"
                     rows={2}
                   />
