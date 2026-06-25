@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
   Tag, MessageSquare, Send, X, Plus, Trash2, Paperclip,
-  FileText, Image, Download, Loader2, Check, Search, ExternalLink,
+  FileText, Image, Download, Loader2, Check, Search, ExternalLink, Eye,
   Truck, AtSign,
 } from "lucide-react";
 import { DialogFooter } from "@/components/ui/dialog";
@@ -166,6 +166,7 @@ export default function TrackerPOCardDetail({
 
   // Attachments state
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
