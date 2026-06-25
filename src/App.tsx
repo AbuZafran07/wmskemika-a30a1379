@@ -39,6 +39,7 @@ import StockMovement from "./pages/reports/StockMovement";
 import ExpiryAlert from "./pages/reports/ExpiryAlert";
 import Profile from "./pages/Profile";
 
+import TrackerPO from "./pages/TrackerPO";
 import NotFound from "./pages/NotFound";
 import Notifications from "./pages/Notifications";
 import DeliveryOrder from "./pages/DeliveryOrder";
@@ -69,6 +70,11 @@ const App = () => (
                   <Route path="/request-delivery" element={
                     <RouteGuard menuKey="requestDelivery">
                       <RequestDelivery />
+                    </RouteGuard>
+                  } />
+                  <Route path="/tracker-po" element={
+                    <RouteGuard menuKey="trackerPO">
+                      <TrackerPO />
                     </RouteGuard>
                   } />
                   

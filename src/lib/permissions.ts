@@ -58,7 +58,8 @@ export type MenuKey =
   | 'stockMovement'
   | 'expiryAlert'
   | 'adjustmentLog'
-  | 'auditLog';
+  | 'auditLog'
+  | 'trackerPO';
 
 /**
  * Menu visibility configuration
@@ -100,6 +101,7 @@ export const MENU_ACCESS: Record<MenuKey, UserRole[]> = {
   expiryAlert: ['super_admin', 'admin', 'finance', 'purchasing', 'warehouse', 'viewer'],
   adjustmentLog: ['super_admin', 'admin', 'finance', 'purchasing', 'warehouse', 'viewer'],
   auditLog: ['super_admin', 'admin'], // Purchasing not allowed
+  trackerPO: ['super_admin', 'admin', 'finance', 'purchasing', 'warehouse', 'viewer'],
 };
 
 // ============================================================================
@@ -411,6 +413,7 @@ export const ROUTE_TO_MENU: Record<string, MenuKey> = {
   '/reports/expiry': 'expiryAlert',
   '/reports/adjustment': 'adjustmentLog',
   '/reports/audit': 'auditLog',
+  '/tracker-po': 'trackerPO',
 };
 
 /**

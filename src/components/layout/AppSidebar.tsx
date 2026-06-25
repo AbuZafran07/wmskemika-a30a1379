@@ -50,6 +50,7 @@ const menuItems: { groupKey: string; items: MenuItem[] }[] = [
     items: [
       { key: "dashboard", menuKey: "dashboard", labelKey: "menu.dashboard", icon: LayoutDashboard, href: "/dashboard" },
       { key: "requestDelivery", menuKey: "requestDelivery", labelKey: "menu.requestDelivery", subLabelKey: "menu.requestDeliverySub", icon: Truck, href: "/request-delivery" },
+      { key: "trackerPO", menuKey: "trackerPO", labelKey: "menu.trackerPO", subLabelKey: "menu.trackerPOSub", icon: ClipboardCheck, href: "/tracker-po" },
     ],
   },
   {
