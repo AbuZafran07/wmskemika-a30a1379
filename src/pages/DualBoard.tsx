@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Truck, ClipboardCheck, Maximize2, Minimize2, LayoutRows, LayoutColumns } from "lucide-react";
+import { Truck, ClipboardCheck, Maximize2, Minimize2, Rows3, Columns3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import RequestDelivery from "./RequestDelivery";
 import TrackerPO from "./TrackerPO";
@@ -134,8 +134,8 @@ export default function DualBoard() {
             onClick={() => handleSetDirection(isVertical ? "horizontal" : "vertical")}
           >
             {isVertical
-              ? <LayoutColumns className="h-3.5 w-3.5" />
-              : <LayoutRows className="h-3.5 w-3.5" />
+              ? <Columns3 className="h-3.5 w-3.5" />
+              : <Rows3 className="h-3.5 w-3.5" />
             }
           </button>
         </TooltipTrigger>
