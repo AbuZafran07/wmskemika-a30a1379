@@ -27,12 +27,14 @@ const BOARD_COLUMNS = [
   { id: "plan_order" as const, label: "Plan Order", color: "bg-blue-600" },
   { id: "processing" as const, label: "Processing Order", color: "bg-yellow-600" },
   { id: "in_stock" as const, label: "In Stock", color: "bg-emerald-600" },
+  { id: "cancelled" as const, label: "Cancelled", color: "bg-red-600" },
 ];
 
 const COLUMN_CHECKLISTS: Record<string, string[]> = {
   plan_order: ["submitted"],
   processing: ["vendor_confirmation", "payment_process"],
   in_stock: [],
+  cancelled: [],
 };
 
 const CHECKLIST_LABELS: Record<string, string> = {
@@ -45,12 +47,14 @@ const STATUS_COLORS: Record<string, string> = {
   approved: "bg-blue-100 text-blue-800",
   partially_received: "bg-yellow-100 text-yellow-800",
   received: "bg-emerald-100 text-emerald-800",
+  cancelled: "bg-red-100 text-red-800",
 };
 
 const STATUS_LABELS: Record<string, string> = {
   approved: "Approved",
   partially_received: "Partially Received",
   received: "Received",
+  cancelled: "Cancelled",
 };
 
 const ARCHIVE_ROLES = ["super_admin", "admin", "purchasing"];
@@ -87,7 +91,7 @@ export default function TrackerPO() {
   const [boardBgUrl, setBoardBgUrl] = useState("");
   const [bgInput, setBgInput] = useState("");
   const [detailCard, setDetailCard] = useState<PlanOrderHeader | null>(null);
-  const [detailColumn, setDetailColumn] = useState<"plan_order" | "processing" | "in_stock">("plan_order");
+  const [detailColumn, setDetailColumn] = useState<"plan_order" | "processing" | "in_stock" | "cancelled">("plan_order");
   const [cardMeta, setCardMeta] = useState<CardMetaMap>({});
 
   // Filter state
@@ -281,10 +285,11 @@ export default function TrackerPO() {
     return "normal";
   }
 
-  function getColumnForCard(planOrderId: string): "plan_order" | "processing" | "in_stock" {
-    const submitted = checklists[planOrderId]?.find((c) => c.checklist_key === "submitted" && c.is_checked);
+  function getColumnForCard(planOrderId: string): "plan_order" | "processing" | "in_stock" | "cancelled" {
     const order = planOrders.find((o) => o.id === planOrderId);
+    if (order?.status === "cancelled") return "cancelled";
     if (order?.status === "received") return "in_stock";
+    const submitted = checklists[planOrderId]?.find((c) => c.checklist_key === "submitted" && c.is_checked);
     if (submitted) return "processing";
     return "plan_order";
   }

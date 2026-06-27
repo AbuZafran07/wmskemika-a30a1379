@@ -14,7 +14,7 @@ export interface ChecklistItem {
   checker_name?: string;
 }
 
-const ACTIVE_STATUSES = ['approved', 'partially_received', 'received'];
+const ACTIVE_STATUSES = ['approved', 'partially_received', 'received', 'cancelled'];
 const CHECKLIST_CAN_TOGGLE_ROLES = ['super_admin', 'admin', 'purchasing'];
 
 export function useTrackerPO() {
@@ -127,21 +127,20 @@ export function useTrackerPO() {
 
   // Determine which kanban column a PO belongs to
   const getColumnCards = useCallback(
-    (col: 'plan_order' | 'processing' | 'in_stock') => {
+    (col: 'plan_order' | 'processing' | 'in_stock' | 'cancelled') => {
       return planOrders.filter((order) => {
+        if (col === 'cancelled') return order.status === 'cancelled';
+
+        if (order.status === 'cancelled') return false;
+
         const submitted = checklists[order.id]?.find(
           (c) => c.checklist_key === 'submitted' && c.is_checked
         );
         const isReceived = order.status === 'received';
 
-        if (col === 'plan_order') {
-          return !submitted && !isReceived;
-        }
-        if (col === 'processing') {
-          return !!submitted && !isReceived;
-        }
-        // in_stock
-        return isReceived;
+        if (col === 'plan_order') return !submitted && !isReceived;
+        if (col === 'processing') return !!submitted && !isReceived;
+        return isReceived; // in_stock
       });
     },
     [planOrders, checklists]

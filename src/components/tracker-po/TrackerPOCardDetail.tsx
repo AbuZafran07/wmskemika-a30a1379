@@ -98,7 +98,7 @@ interface POItem {
 
 interface Props {
   planOrder: PlanOrderHeader;
-  column: "plan_order" | "processing" | "in_stock";
+  column: "plan_order" | "processing" | "in_stock" | "cancelled";
   checklists: ChecklistItem[];
   canToggleChecklist: boolean;
   onClose: () => void;
