@@ -29,7 +29,8 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import EmojiPicker, { EmojiClickData, Theme } from "emoji-picker-react";
+import EmojiPicker, { Theme } from "emoji-picker-react";
+import type { EmojiClickData } from "emoji-picker-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import ktalkIcon from "@/assets/ktalk-icon.png";
 
