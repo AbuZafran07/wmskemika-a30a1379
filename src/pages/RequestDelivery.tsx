@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { Plus, Package, Calendar as CalendarIcon, User, Building2, Truck, RefreshCw, Search, CheckSquare, Image, X, Maximize2, Minimize2, ZoomIn, ZoomOut, CheckCircle2, Filter, Archive, RotateCcw, Trash2, AlertTriangle, Bell, CalendarDays, MessageCircle, LayoutRows, ExternalLink } from "lucide-react";
+import { Plus, Package, Calendar as CalendarIcon, User, Building2, Truck, RefreshCw, Search, CheckSquare, Image, X, Maximize2, Minimize2, ZoomIn, ZoomOut, CheckCircle2, Filter, Archive, RotateCcw, Trash2, AlertTriangle, Bell, CalendarDays, MessageCircle, Rows3, ExternalLink } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { format, startOfWeek, addDays, isSameDay } from "date-fns";
@@ -1283,7 +1283,7 @@ export default function RequestDelivery({ compact = false }: { compact?: boolean
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigate("/dual-board")}>
-                    <LayoutRows className="h-4 w-4" />
+                    <Rows3 className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent><p>Dual Board View</p></TooltipContent>

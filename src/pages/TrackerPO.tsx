@@ -14,7 +14,7 @@ import { Calendar } from "@/components/ui/calendar";
 import {
   Search, Maximize2, Minimize2, ZoomIn, ZoomOut, MessageSquare, Paperclip,
   ClipboardCheck, AlertTriangle, Building2, Calendar as CalendarIcon, Filter,
-  Archive, RefreshCw, X, Image, CheckCircle2, RotateCcw, Trash2, LayoutRows, ExternalLink
+  Archive, RefreshCw, X, Image, CheckCircle2, RotateCcw, Trash2, Rows3, ExternalLink
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { format, isPast, differenceInDays, isSameDay } from "date-fns";
@@ -690,7 +690,7 @@ export default function TrackerPO({ compact = false }: { compact?: boolean }) {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigate("/dual-board")}>
-                    <LayoutRows className="h-4 w-4" />
+                    <Rows3 className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent><p>Dual Board View</p></TooltipContent>
