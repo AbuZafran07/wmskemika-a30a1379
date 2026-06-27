@@ -328,6 +328,16 @@ export default function TrackerPO() {
           </Badge>
         </div>
 
+        {/* Partial Delivery badge */}
+        {order.status === "partially_received" && (
+          <div className="flex items-center gap-1 mb-1.5">
+            <span className="inline-flex items-center gap-1 bg-orange-100 text-orange-700 border border-orange-300 rounded-sm px-1.5 py-0.5 text-[9px] font-semibold">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-orange-500" />
+              Partial Delivery
+            </span>
+          </div>
+        )}
+
         {/* Supplier */}
         <div className="flex items-center gap-1 mb-1">
           <Building2 className="h-3 w-3 text-muted-foreground shrink-0" />
