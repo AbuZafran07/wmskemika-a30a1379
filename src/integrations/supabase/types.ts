@@ -615,6 +615,9 @@ export type Database = {
         Row: {
           approved_at: string | null
           approved_by: string | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
           created_at: string | null
           created_by: string | null
           deleted_at: string | null
@@ -639,6 +642,9 @@ export type Database = {
         Insert: {
           approved_at?: string | null
           approved_by?: string | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           created_at?: string | null
           created_by?: string | null
           deleted_at?: string | null
@@ -663,6 +669,9 @@ export type Database = {
         Update: {
           approved_at?: string | null
           approved_by?: string | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           created_at?: string | null
           created_by?: string | null
           deleted_at?: string | null
@@ -751,6 +760,32 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      po_tracker_archived: {
+        Row: {
+          archived_at: string
+          archived_by: string | null
+          plan_order_id: string
+        }
+        Insert: {
+          archived_at?: string
+          archived_by?: string | null
+          plan_order_id: string
+        }
+        Update: {
+          archived_at?: string
+          archived_by?: string | null
+          plan_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "po_tracker_archived_plan_order_id_fkey"
+            columns: ["plan_order_id"]
+            isOneToOne: true
+            referencedRelation: "plan_order_headers"
             referencedColumns: ["id"]
           },
         ]
