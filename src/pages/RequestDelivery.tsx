@@ -969,8 +969,8 @@ export default function RequestDelivery() {
   }
 
   return (
-    <div 
-      className="flex flex-col h-[calc(100vh-4rem)] relative"
+    <div
+      className={cn("flex flex-col relative", isFullView ? "fixed inset-0 z-50 h-screen" : "h-[calc(100vh-4rem)]")}
       style={boardBgUrl ? {
         backgroundImage: `url(${boardBgUrl})`,
         backgroundSize: "cover",
