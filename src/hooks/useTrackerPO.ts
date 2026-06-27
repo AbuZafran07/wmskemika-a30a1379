@@ -44,7 +44,7 @@ export function useTrackerPO() {
           id, plan_number, plan_date, supplier_id, expected_delivery_date,
           reference_no, notes, status, total_amount, discount, tax_rate,
           shipping_cost, grand_total, created_at, created_by, approved_by,
-          approved_at, po_document_url,
+          approved_at, po_document_url, cancel_reason, cancelled_at,
           supplier:suppliers(id, name, code, address, contact_person, phone, terms_payment)
         `)
         .in('status', ACTIVE_STATUSES)

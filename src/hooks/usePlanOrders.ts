@@ -31,6 +31,9 @@ export interface PlanOrderHeader {
   is_deleted?: boolean;
   deleted_at?: string | null;
   deleted_by?: string | null;
+  cancel_reason?: string | null;
+  cancelled_by?: string | null;
+  cancelled_at?: string | null;
   supplier?: {
     id: string;
     name: string;
@@ -403,13 +406,24 @@ export async function approvePlanOrder(orderId: string, approveReason?: string):
 }
 
 // Cancel Plan Order using RPC
-export async function cancelPlanOrder(orderId: string): Promise<{ success: boolean; error?: string }> {
+export async function cancelPlanOrder(orderId: string, reason?: string): Promise<{ success: boolean; error?: string }> {
   try {
     const { data, error } = await supabase.rpc('plan_order_cancel', { order_id: orderId });
-    
+
     if (error) throw error;
-    
+
     const result = data as { success: boolean; error?: string };
+
+    // Simpan cancel reason + timestamp jika ada
+    if (result.success && reason?.trim()) {
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from('plan_order_headers').update({
+        cancel_reason: reason.trim(),
+        cancelled_by: user?.id ?? null,
+        cancelled_at: new Date().toISOString(),
+      }).eq('id', orderId);
+    }
+
     return result;
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to cancel plan order';

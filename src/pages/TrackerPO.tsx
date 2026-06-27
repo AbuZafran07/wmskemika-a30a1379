@@ -359,6 +359,14 @@ export default function TrackerPO() {
         {/* Grand Total */}
         <p className="text-[10px] text-muted-foreground mb-2">{formatCurrency(order.grand_total)}</p>
 
+        {/* Cancel reason */}
+        {order.status === "cancelled" && order.cancel_reason && (
+          <div className="flex gap-1 items-start mb-2 bg-red-50 border border-red-200 rounded px-2 py-1.5">
+            <X className="h-3 w-3 text-red-500 shrink-0 mt-0.5" />
+            <p className="text-[10px] text-red-700 leading-relaxed break-words">{order.cancel_reason}</p>
+          </div>
+        )}
+
         {/* Checklists */}
         {checklistKeys.length > 0 && (
           <div className="space-y-1 border-t border-border/40 pt-1.5 mt-1" onClick={(e) => e.stopPropagation()}>

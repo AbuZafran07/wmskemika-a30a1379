@@ -237,6 +237,7 @@ export default function PlanOrder() {
   const [isApproveDialogOpen, setIsApproveDialogOpen] = useState(false);
   const [approveReason, setApproveReason] = useState("");
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
 
@@ -717,7 +718,7 @@ export default function PlanOrder() {
 
     setIsCancelling(true);
     try {
-      const result = await cancelPlanOrder(selectedOrder.id);
+      const result = await cancelPlanOrder(selectedOrder.id, cancelReason);
       if (!result.success) throw new Error(result.error || "Failed to cancel");
       toast.success(language === "en" ? "Plan Order cancelled" : "Plan Order dibatalkan");
       refetch();
@@ -727,6 +728,7 @@ export default function PlanOrder() {
     }
     setIsCancelling(false);
     setIsCancelDialogOpen(false);
+    setCancelReason("");
     setSelectedOrder(null);
   };
 
@@ -1719,7 +1721,7 @@ export default function PlanOrder() {
       </AlertDialog>
 
       {/* Cancel Dialog */}
-      <AlertDialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
+      <AlertDialog open={isCancelDialogOpen} onOpenChange={(open) => { setIsCancelDialogOpen(open); if (!open) setCancelReason(""); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
@@ -1731,6 +1733,19 @@ export default function PlanOrder() {
                 : `Apakah Anda yakin ingin membatalkan "${selectedOrder?.plan_number}"?`}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="px-1 pb-1">
+            <label className="text-sm font-medium">
+              {language === "en" ? "Cancellation Reason" : "Alasan Pembatalan"}
+              <span className="text-muted-foreground font-normal ml-1">{language === "en" ? "(optional)" : "(opsional)"}</span>
+            </label>
+            <textarea
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder={language === "en" ? "e.g. Budget cut, supplier issue, etc." : "mis. anggaran dipotong, masalah supplier, dll."}
+              rows={3}
+              className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+            />
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isCancelling}>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
