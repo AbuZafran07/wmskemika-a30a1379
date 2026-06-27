@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { Plus, Package, Calendar as CalendarIcon, User, Building2, Truck, RefreshCw, Search, CheckSquare, Image, X, Maximize2, Minimize2, ZoomIn, ZoomOut, CheckCircle2, Filter, Archive, RotateCcw, Trash2, AlertTriangle, Bell, CalendarDays, MessageCircle } from "lucide-react";
+import { Plus, Package, Calendar as CalendarIcon, User, Building2, Truck, RefreshCw, Search, CheckSquare, Image, X, Maximize2, Minimize2, ZoomIn, ZoomOut, CheckCircle2, Filter, Archive, RotateCcw, Trash2, AlertTriangle, Bell, CalendarDays, MessageCircle, LayoutRows, ExternalLink } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { format, startOfWeek, addDays, isSameDay } from "date-fns";
@@ -81,8 +81,9 @@ interface DeliveryCard {
   items: { product_name: string; ordered_qty: number; qty_delivered: number }[];
 }
 
-export default function RequestDelivery() {
+export default function RequestDelivery({ compact = false }: { compact?: boolean }) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { t } = useLanguage();
   const { isHoliday } = useHolidays();
   const [cards, setCards] = useState<DeliveryCard[]>([]);
@@ -970,8 +971,11 @@ export default function RequestDelivery() {
 
   return (
     <div
-      className={cn("flex flex-col relative", isFullView ? "fixed inset-0 z-50 h-screen" : "h-[calc(100vh-4rem)]")}
-      style={boardBgUrl ? {
+      className={cn(
+        "flex flex-col relative",
+        compact ? "h-full overflow-hidden" : (isFullView ? "fixed inset-0 z-50 h-screen" : "h-[calc(100vh-4rem)]")
+      )}
+      style={!compact && boardBgUrl ? {
         backgroundImage: `url(${boardBgUrl})`,
         backgroundSize: "cover",
         backgroundPosition: "center",
@@ -982,13 +986,23 @@ export default function RequestDelivery() {
       {boardBgUrl && <div className="absolute inset-0 bg-background/70 dark:bg-background/80 pointer-events-none z-0" />}
       
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b bg-card/90 backdrop-blur-sm flex-shrink-0 relative z-10">
-        <div className="flex items-center gap-3">
-          <Truck className="h-6 w-6 text-primary" />
-          <div>
-            <h1 className="text-lg font-bold text-foreground">Request & Delivery Order</h1>
-            <p className="text-xs text-muted-foreground">Kanban Board Jadwal Pengiriman</p>
+      <div className={cn("flex items-center justify-between border-b bg-card/90 backdrop-blur-sm flex-shrink-0 relative z-10", compact ? "px-3 py-2" : "px-4 py-3")}>
+        <div className="flex items-center gap-2 min-w-0">
+          <Truck className={cn("text-primary shrink-0", compact ? "h-4 w-4" : "h-6 w-6")} />
+          <div className="min-w-0">
+            <h1 className={cn("font-bold text-foreground leading-tight", compact ? "text-sm" : "text-lg")}>Request & Delivery Order</h1>
+            {!compact && <p className="text-xs text-muted-foreground">Kanban Board Jadwal Pengiriman</p>}
           </div>
+          {compact && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-6 w-6 ml-1" onClick={() => navigate("/request-delivery")}>
+                  <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent><p>Buka halaman penuh</p></TooltipContent>
+            </Tooltip>
+          )}
         </div>
         <div className="flex items-center gap-1.5">
           <TooltipProvider delayDuration={200}>
@@ -1237,32 +1251,43 @@ export default function RequestDelivery() {
               </PopoverContent>
             </Popover>
 
-            {/* Full View Toggle */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleSetFullView(!isFullView)}>
-                  {isFullView ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent><p>{isFullView ? "Normal View" : "Full View"}</p></TooltipContent>
-            </Tooltip>
+            {/* Full View Toggle — disembunyikan saat compact */}
+            {!compact && (
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleSetFullView(!isFullView)}>
+                      {isFullView ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent><p>{isFullView ? "Normal View" : "Full View"}</p></TooltipContent>
+                </Tooltip>
 
-            {isFullView && (
-              <div className="flex items-center gap-2 bg-muted/50 rounded-md px-2 py-1">
-                <ZoomOut className="h-3.5 w-3.5 text-muted-foreground" />
-                <input
-                  type="range"
-                  min={50}
-                  max={120}
-                  step={5}
-                  value={zoomLevel}
-                  onChange={(e) => handleSetZoom(Number(e.target.value))}
-                  className="w-20 h-1.5 accent-primary cursor-pointer"
-                  title={`Zoom: ${zoomLevel}%`}
-                />
-                <ZoomIn className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-[10px] text-muted-foreground font-medium w-8">{zoomLevel}%</span>
-              </div>
+                {isFullView && (
+                  <div className="flex items-center gap-2 bg-muted/50 rounded-md px-2 py-1">
+                    <ZoomOut className="h-3.5 w-3.5 text-muted-foreground" />
+                    <input type="range" min={50} max={120} step={5} value={zoomLevel}
+                      onChange={(e) => handleSetZoom(Number(e.target.value))}
+                      className="w-20 h-1.5 accent-primary cursor-pointer"
+                      title={`Zoom: ${zoomLevel}%`}
+                    />
+                    <ZoomIn className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-[10px] text-muted-foreground font-medium w-8">{zoomLevel}%</span>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Dual Board — disembunyikan saat compact */}
+            {!compact && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigate("/dual-board")}>
+                    <LayoutRows className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent><p>Dual Board View</p></TooltipContent>
+              </Tooltip>
             )}
 
             {/* Archived */}
@@ -1305,10 +1330,10 @@ export default function RequestDelivery() {
       </div>
 
       {/* Board */}
-      <div ref={scrollRef} className={cn("flex-1 relative z-10", isFullView ? "overflow-auto" : "overflow-x-auto overflow-y-hidden")}>
+      <div ref={scrollRef} className={cn("flex-1 relative z-10 min-h-0", (isFullView || compact) ? "overflow-auto" : "overflow-x-auto overflow-y-hidden")}>
         <div
-          className={cn("flex gap-3 p-4 h-full", isFullView ? "w-full" : "min-w-max")}
-          style={isFullView ? { transform: `scale(${zoomLevel / 100})`, transformOrigin: "top left", width: `${10000 / zoomLevel}%`, height: `${10000 / zoomLevel}%` } : undefined}
+          className={cn("flex gap-3 p-4 h-full", (isFullView || compact) ? "w-full" : "min-w-max")}
+          style={isFullView && !compact ? { transform: `scale(${zoomLevel / 100})`, transformOrigin: "top left", width: `${10000 / zoomLevel}%`, height: `${10000 / zoomLevel}%` } : undefined}
         >
           {BOARD_COLUMNS.map((column) => {
             const columnCards = getColumnCards(column.id);
@@ -1322,7 +1347,7 @@ export default function RequestDelivery() {
                 key={column.id}
                 className={cn(
                   "flex flex-col rounded-xl border transition-colors",
-                  isFullView ? "flex-1 min-w-0" : "w-[280px] flex-shrink-0",
+                  (isFullView || compact) ? "flex-1 min-w-0" : "w-[280px] flex-shrink-0",
                   isHolidayColumn
                     ? "bg-red-500/10 border-red-500/30 dark:bg-red-950/20 dark:border-red-500/20"
                     : "bg-muted/30 border-border/50",

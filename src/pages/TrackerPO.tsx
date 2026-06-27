@@ -14,8 +14,9 @@ import { Calendar } from "@/components/ui/calendar";
 import {
   Search, Maximize2, Minimize2, ZoomIn, ZoomOut, MessageSquare, Paperclip,
   ClipboardCheck, AlertTriangle, Building2, Calendar as CalendarIcon, Filter,
-  Archive, RefreshCw, X, Image, CheckCircle2, RotateCcw, Trash2
+  Archive, RefreshCw, X, Image, CheckCircle2, RotateCcw, Trash2, LayoutRows, ExternalLink
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { format, isPast, differenceInDays, isSameDay } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -77,8 +78,9 @@ interface CardMetaMap {
 interface TrackerLabel { id: string; name: string; color: string; }
 interface ArchivedPO { plan_order_id: string; archived_at: string; plan_number: string; supplier_name: string; }
 
-export default function TrackerPO() {
+export default function TrackerPO({ compact = false }: { compact?: boolean }) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const scrollRef = useRef<HTMLDivElement>(null);
   const bgFileRef = useRef<HTMLInputElement>(null);
   const { planOrders, checklists, loading, getColumnCards, toggleChecklist, canToggleChecklist, fetchData, userRole } = useTrackerPO();
@@ -432,17 +434,35 @@ export default function TrackerPO() {
   return (
     <TooltipProvider delayDuration={200}>
       <div
-        className={cn("flex flex-col h-full", isFullView ? "fixed inset-0 z-50 bg-background" : "")}
-        style={boardBgUrl ? { backgroundImage: `url(${boardBgUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+        className={cn(
+          "flex flex-col",
+          compact ? "h-full overflow-hidden" : (isFullView ? "fixed inset-0 z-50 h-screen bg-background" : "h-full")
+        )}
+        style={!compact && boardBgUrl ? { backgroundImage: `url(${boardBgUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
       >
         {/* Header */}
-        <div className={cn("px-6 py-3 border-b flex items-center justify-between shrink-0", boardBgUrl ? "bg-background/80 backdrop-blur-sm" : "bg-background")}>
-          <div>
-            <h1 className="text-lg font-bold flex items-center gap-2">
-              <ClipboardCheck className="w-5 h-5 text-blue-600" />
-              Tracker Purchase Order
-            </h1>
-            <p className="text-xs text-muted-foreground">Purchase Order Tracker</p>
+        <div className={cn(
+          "border-b flex items-center justify-between shrink-0",
+          compact ? "px-3 py-2 bg-background" : (boardBgUrl ? "px-6 py-3 bg-background/80 backdrop-blur-sm" : "px-6 py-3 bg-background")
+        )}>
+          <div className="flex items-center gap-2 min-w-0">
+            <ClipboardCheck className={cn("text-blue-600 shrink-0", compact ? "w-4 h-4" : "w-5 h-5")} />
+            <div className="min-w-0">
+              <h1 className={cn("font-bold leading-tight", compact ? "text-sm" : "text-lg")}>
+                Tracker Purchase Order
+              </h1>
+              {!compact && <p className="text-xs text-muted-foreground">Purchase Order Tracker</p>}
+            </div>
+            {compact && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 ml-1" onClick={() => navigate("/tracker-po")}>
+                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent><p>Buka halaman penuh</p></TooltipContent>
+              </Tooltip>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -638,28 +658,43 @@ export default function TrackerPO() {
               </PopoverContent>
             </Popover>
 
-            {/* 4. Full View */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleSetFullView(!isFullView)}>
-                  {isFullView ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent><p>{isFullView ? "Normal View" : "Full View"}</p></TooltipContent>
-            </Tooltip>
+            {/* 4. Full View — disembunyikan saat compact */}
+            {!compact && (
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleSetFullView(!isFullView)}>
+                      {isFullView ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent><p>{isFullView ? "Normal View" : "Full View"}</p></TooltipContent>
+                </Tooltip>
 
-            {/* Zoom slider — hanya tampil saat full view */}
-            {isFullView && (
-              <div className="flex items-center gap-2 bg-muted/50 rounded-md px-2 py-1">
-                <ZoomOut className="h-3.5 w-3.5 text-muted-foreground" />
-                <input type="range" min={40} max={130} step={5} value={zoomLevel}
-                  onChange={(e) => handleSetZoom(Number(e.target.value))}
-                  className="w-20 h-1.5 accent-primary cursor-pointer"
-                  title={`Zoom: ${zoomLevel}%`}
-                />
-                <ZoomIn className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-[10px] text-muted-foreground font-medium w-8">{zoomLevel}%</span>
-              </div>
+                {isFullView && (
+                  <div className="flex items-center gap-2 bg-muted/50 rounded-md px-2 py-1">
+                    <ZoomOut className="h-3.5 w-3.5 text-muted-foreground" />
+                    <input type="range" min={40} max={130} step={5} value={zoomLevel}
+                      onChange={(e) => handleSetZoom(Number(e.target.value))}
+                      className="w-20 h-1.5 accent-primary cursor-pointer"
+                      title={`Zoom: ${zoomLevel}%`}
+                    />
+                    <ZoomIn className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-[10px] text-muted-foreground font-medium w-8">{zoomLevel}%</span>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Dual Board — disembunyikan saat compact */}
+            {!compact && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigate("/dual-board")}>
+                    <LayoutRows className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent><p>Dual Board View</p></TooltipContent>
+              </Tooltip>
             )}
 
             {/* 5. Archive */}
@@ -690,13 +725,13 @@ export default function TrackerPO() {
         </div>
 
         {/* Board */}
-        <div ref={scrollRef} className={cn("flex-1 relative", isFullView ? "overflow-auto" : "overflow-x-auto overflow-y-hidden")}>
+        <div ref={scrollRef} className={cn("flex-1 relative min-h-0", (isFullView || compact) ? "overflow-auto" : "overflow-x-auto overflow-y-hidden")}>
           {loading ? (
             <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">Memuat data...</div>
           ) : (
             <div
-              className={cn("flex gap-3 p-4 h-full", isFullView ? "w-full" : "min-w-max")}
-              style={isFullView ? { transform: `scale(${zoomLevel / 100})`, transformOrigin: "top left", width: `${10000 / zoomLevel}%`, height: `${10000 / zoomLevel}%` } : undefined}
+              className={cn("flex gap-3 p-4 h-full", (isFullView || compact) ? "w-full" : "min-w-max")}
+              style={isFullView && !compact ? { transform: `scale(${zoomLevel / 100})`, transformOrigin: "top left", width: `${10000 / zoomLevel}%`, height: `${10000 / zoomLevel}%` } : undefined}
             >
               {BOARD_COLUMNS.map((col) => {
                 const colCards = getColumnCards(col.id).filter((o) => !archivedIds.has(o.id));
@@ -705,7 +740,7 @@ export default function TrackerPO() {
                 return (
                   <div key={col.id}
                     className={cn("flex flex-col rounded-xl border transition-colors bg-muted/30 border-border/50",
-                      isFullView ? "flex-1 min-w-0" : "w-[280px] flex-shrink-0"
+                      (isFullView || compact) ? "flex-1 min-w-0" : "w-[280px] flex-shrink-0"
                     )}
                   >
                     <div className={cn("px-3 py-2.5 rounded-t-xl flex items-center justify-between", col.color)}>

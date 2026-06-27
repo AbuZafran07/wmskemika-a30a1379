@@ -40,6 +40,7 @@ import ExpiryAlert from "./pages/reports/ExpiryAlert";
 import Profile from "./pages/Profile";
 
 import TrackerPO from "./pages/TrackerPO";
+import DualBoard from "./pages/DualBoard";
 import NotFound from "./pages/NotFound";
 import Notifications from "./pages/Notifications";
 import DeliveryOrder from "./pages/DeliveryOrder";
@@ -75,6 +76,11 @@ const App = () => (
                   <Route path="/tracker-po" element={
                     <RouteGuard menuKey="trackerPO">
                       <TrackerPO />
+                    </RouteGuard>
+                  } />
+                  <Route path="/dual-board" element={
+                    <RouteGuard menuKey="dualBoard">
+                      <DualBoard />
                     </RouteGuard>
                   } />
                   
