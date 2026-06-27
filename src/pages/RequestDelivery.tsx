@@ -1006,6 +1006,20 @@ export default function RequestDelivery({ compact = false }: { compact?: boolean
         </div>
         <div className="flex items-center gap-1.5">
           <TooltipProvider delayDuration={200}>
+            {/* Zoom slider compact — hanya tampil saat compact */}
+            {compact && (
+              <div className="flex items-center gap-1.5 bg-muted/50 rounded-md px-2 py-1">
+                <ZoomOut className="h-3 w-3 text-muted-foreground cursor-pointer" onClick={() => handleSetZoom(zoomLevel - 5)} />
+                <input type="range" min={40} max={130} step={5} value={zoomLevel}
+                  onChange={(e) => handleSetZoom(Number(e.target.value))}
+                  className="w-16 h-1.5 accent-primary cursor-pointer"
+                  title={`Zoom: ${zoomLevel}%`}
+                />
+                <ZoomIn className="h-3 w-3 text-muted-foreground cursor-pointer" onClick={() => handleSetZoom(zoomLevel + 5)} />
+                <span className="text-[10px] text-muted-foreground font-medium w-7 tabular-nums">{zoomLevel}%</span>
+              </div>
+            )}
+
             {/* Background changer - super_admin only */}
             {isSuperAdmin && (
               <Popover>
@@ -1333,7 +1347,7 @@ export default function RequestDelivery({ compact = false }: { compact?: boolean
       <div ref={scrollRef} className={cn("flex-1 relative z-10 min-h-0", (isFullView || compact) ? "overflow-auto" : "overflow-x-auto overflow-y-hidden")}>
         <div
           className={cn("flex gap-3 p-4 h-full", (isFullView || compact) ? "w-full" : "min-w-max")}
-          style={isFullView && !compact ? { transform: `scale(${zoomLevel / 100})`, transformOrigin: "top left", width: `${10000 / zoomLevel}%`, height: `${10000 / zoomLevel}%` } : undefined}
+          style={(isFullView || compact) ? { transform: `scale(${zoomLevel / 100})`, transformOrigin: "top left", width: `${10000 / zoomLevel}%`, height: `${10000 / zoomLevel}%` } : undefined}
         >
           {BOARD_COLUMNS.map((column) => {
             const columnCards = getColumnCards(column.id);
