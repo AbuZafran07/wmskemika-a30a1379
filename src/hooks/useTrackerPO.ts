@@ -11,11 +11,28 @@ export interface ChecklistItem {
   is_checked: boolean;
   checked_by: string | null;
   checked_at: string | null;
+  checklist_date: string | null;
   checker_name?: string;
 }
 
 const ACTIVE_STATUSES = ['approved', 'partially_received', 'received', 'cancelled'];
 const CHECKLIST_CAN_TOGGLE_ROLES = ['super_admin', 'admin', 'purchasing'];
+
+// Checklist keys yang membutuhkan input tanggal
+export const CHECKLIST_NEEDS_DATE: Record<string, boolean> = {
+  invoice_received: true,
+  invoice_recorded: true,
+};
+
+const LABEL_MAP: Record<string, string> = {
+  submitted: 'Submitted',
+  vendor_confirmation: 'Vendor Confirmation',
+  payment_process: 'Payment Process',
+  invoice_received: 'Invoice Received',
+  invoice_recorded: 'Invoice Recorded',
+};
+
+export type TrackerColumn = 'plan_order' | 'processing' | 'in_stock' | 'po_closed' | 'cancelled';
 
 export function useTrackerPO() {
   const { user } = useAuth();
@@ -24,7 +41,6 @@ export function useTrackerPO() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch user role once
   useEffect(() => {
     if (!user) return;
     supabase
@@ -37,7 +53,6 @@ export function useTrackerPO() {
 
   const fetchData = useCallback(async () => {
     try {
-      // Fetch plan orders with supplier data
       const { data: orders, error: ordersError } = await supabase
         .from('plan_order_headers')
         .select(`
@@ -60,16 +75,14 @@ export function useTrackerPO() {
         return;
       }
 
-      // Fetch checklists for all visible POs
       const ids = typedOrders.map((o) => o.id);
       const { data: checklistData, error: checklistError } = await supabase
         .from('po_tracker_checklists')
-        .select('id, plan_order_id, checklist_key, is_checked, checked_by, checked_at')
+        .select('id, plan_order_id, checklist_key, is_checked, checked_by, checked_at, checklist_date')
         .in('plan_order_id', ids);
 
       if (checklistError) throw checklistError;
 
-      // Enrich with checker names
       const checkerIds = [...new Set(
         (checklistData || []).map((c: any) => c.checked_by).filter(Boolean)
       )] as string[];
@@ -90,6 +103,7 @@ export function useTrackerPO() {
           is_checked: c.is_checked,
           checked_by: c.checked_by,
           checked_at: c.checked_at,
+          checklist_date: c.checklist_date ?? null,
           checker_name: c.checked_by ? profileMap[c.checked_by] : undefined,
         };
         if (!byPO[c.plan_order_id]) byPO[c.plan_order_id] = [];
@@ -103,11 +117,8 @@ export function useTrackerPO() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Realtime subscriptions
   useEffect(() => {
     const channelOrders = supabase
       .channel('tracker-po-plan-orders')
@@ -125,30 +136,41 @@ export function useTrackerPO() {
     };
   }, [fetchData]);
 
-  // Determine which kanban column a PO belongs to
+  // ─── Column logic ─────────────────────────────────────────────────────────
+
+  const isInvoiceDone = useCallback((planOrderId: string) => {
+    const items = checklists[planOrderId] || [];
+    const invReceived = items.find(c => c.checklist_key === 'invoice_received' && c.is_checked);
+    const invRecorded = items.find(c => c.checklist_key === 'invoice_recorded' && c.is_checked);
+    return !!invReceived && !!invRecorded;
+  }, [checklists]);
+
   const getColumnCards = useCallback(
-    (col: 'plan_order' | 'processing' | 'in_stock' | 'cancelled') => {
+    (col: TrackerColumn) => {
       return planOrders.filter((order) => {
         if (col === 'cancelled') return order.status === 'cancelled';
-
         if (order.status === 'cancelled') return false;
 
         const submitted = checklists[order.id]?.find(
           (c) => c.checklist_key === 'submitted' && c.is_checked
         );
         const isReceived = order.status === 'received';
+        const invoiceDone = isInvoiceDone(order.id);
 
         if (col === 'plan_order') return !submitted && !isReceived;
         if (col === 'processing') return !!submitted && !isReceived;
-        return isReceived; // in_stock
+        if (col === 'in_stock')  return isReceived && !invoiceDone;
+        if (col === 'po_closed') return isReceived && invoiceDone;
+        return false;
       });
     },
-    [planOrders, checklists]
+    [planOrders, checklists, isInvoiceDone]
   );
 
-  // Toggle checklist — only one-way (false → true), role-gated
+  // ─── Toggle checklist (one-way, with optional date) ───────────────────────
+
   const toggleChecklist = useCallback(
-    async (planOrderId: string, checklistKey: string) => {
+    async (planOrderId: string, checklistKey: string, checklistDate?: string) => {
       if (!user || !userRole) return;
       if (!CHECKLIST_CAN_TOGGLE_ROLES.includes(userRole)) {
         toast.error('Anda tidak memiliki akses untuk mengubah checklist');
@@ -156,33 +178,39 @@ export function useTrackerPO() {
       }
 
       const existing = checklists[planOrderId]?.find((c) => c.checklist_key === checklistKey);
-      if (existing?.is_checked) return; // Already checked, immutable
+      if (existing?.is_checked) return;
+
+      // Jika checklist butuh tanggal, wajib diisi
+      if (CHECKLIST_NEEDS_DATE[checklistKey] && !checklistDate) {
+        toast.error('Tanggal harus diisi terlebih dahulu');
+        return;
+      }
 
       const checkerName = (user as any).name || (user as any).email || 'User';
-      const labelMap: Record<string, string> = {
-        submitted: 'Submitted',
-        vendor_confirmation: 'Vendor Confirmation',
-        payment_process: 'Payment Process',
-      };
 
       try {
-        const { error } = await supabase.from('po_tracker_checklists').upsert(
-          {
-            plan_order_id: planOrderId,
-            checklist_key: checklistKey,
-            is_checked: true,
-            checked_by: user.id,
-            checked_at: new Date().toISOString(),
-          },
-          { onConflict: 'plan_order_id,checklist_key' }
-        );
+        const payload: Record<string, unknown> = {
+          plan_order_id: planOrderId,
+          checklist_key: checklistKey,
+          is_checked: true,
+          checked_by: user.id,
+          checked_at: new Date().toISOString(),
+        };
+        if (checklistDate) payload.checklist_date = checklistDate;
+
+        const { error } = await supabase
+          .from('po_tracker_checklists')
+          .upsert(payload, { onConflict: 'plan_order_id,checklist_key' });
         if (error) throw error;
 
-        // Log activity
+        const dateLabel = checklistDate
+          ? ` (${new Date(checklistDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })})`
+          : '';
+
         await supabase.from('po_tracker_comments').insert({
           plan_order_id: planOrderId,
           user_id: user.id,
-          message: `${checkerName} mencentang '${labelMap[checklistKey] ?? checklistKey}'`,
+          message: `${checkerName} mencentang '${LABEL_MAP[checklistKey] ?? checklistKey}'${dateLabel}`,
           type: 'activity',
         });
 
@@ -208,5 +236,6 @@ export function useTrackerPO() {
     getColumnCards,
     toggleChecklist,
     canToggleChecklist,
+    isInvoiceDone,
   };
 }

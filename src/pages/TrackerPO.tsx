@@ -20,28 +20,33 @@ import { useNavigate } from "react-router-dom";
 import { format, isPast, differenceInDays, isSameDay } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import { useTrackerPO } from "@/hooks/useTrackerPO";
+import { useTrackerPO, CHECKLIST_NEEDS_DATE } from "@/hooks/useTrackerPO";
+import type { TrackerColumn } from "@/hooks/useTrackerPO";
 import type { PlanOrderHeader } from "@/hooks/usePlanOrders";
 import TrackerPOCardDetail from "@/components/tracker-po/TrackerPOCardDetail";
 
-const BOARD_COLUMNS = [
-  { id: "plan_order" as const, label: "Plan Order", color: "bg-blue-600" },
-  { id: "processing" as const, label: "Processing Order", color: "bg-yellow-600" },
-  { id: "in_stock" as const, label: "In Stock", color: "bg-emerald-600" },
-  { id: "cancelled" as const, label: "Cancelled", color: "bg-red-600" },
+const BOARD_COLUMNS: { id: TrackerColumn; label: string; color: string }[] = [
+  { id: "plan_order",   label: "Plan Order",       color: "bg-blue-600"   },
+  { id: "processing",   label: "Processing Order", color: "bg-yellow-600" },
+  { id: "in_stock",     label: "In Stock",         color: "bg-emerald-600"},
+  { id: "po_closed",    label: "PO Closed",        color: "bg-purple-700" },
+  { id: "cancelled",    label: "Cancelled",        color: "bg-red-600"    },
 ];
 
 const COLUMN_CHECKLISTS: Record<string, string[]> = {
-  plan_order: ["submitted"],
-  processing: ["vendor_confirmation", "payment_process"],
-  in_stock: [],
-  cancelled: [],
+  plan_order:  ["submitted"],
+  processing:  ["vendor_confirmation", "payment_process"],
+  in_stock:    ["invoice_received", "invoice_recorded"],
+  po_closed:   [],
+  cancelled:   [],
 };
 
 const CHECKLIST_LABELS: Record<string, string> = {
-  submitted: "Submitted",
+  submitted:           "Submitted",
   vendor_confirmation: "Vendor Confirmation",
-  payment_process: "Payment Process",
+  payment_process:     "Payment Process",
+  invoice_received:    "Invoice Received",
+  invoice_recorded:    "Invoice Recorded",
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -93,8 +98,10 @@ export default function TrackerPO({ compact = false }: { compact?: boolean }) {
   const [boardBgUrl, setBoardBgUrl] = useState("");
   const [bgInput, setBgInput] = useState("");
   const [detailCard, setDetailCard] = useState<PlanOrderHeader | null>(null);
-  const [detailColumn, setDetailColumn] = useState<"plan_order" | "processing" | "in_stock" | "cancelled">("plan_order");
+  const [detailColumn, setDetailColumn] = useState<TrackerColumn>("plan_order");
   const [cardMeta, setCardMeta] = useState<CardMetaMap>({});
+  // Pending date inputs untuk checklist invoice: key = `${planOrderId}_${checklistKey}`
+  const [pendingDates, setPendingDates] = useState<Record<string, string>>({});
 
   // Filter state
   const [filterLabelNames, setFilterLabelNames] = useState<string[]>([]);
@@ -287,10 +294,16 @@ export default function TrackerPO({ compact = false }: { compact?: boolean }) {
     return "normal";
   }
 
-  function getColumnForCard(planOrderId: string): "plan_order" | "processing" | "in_stock" | "cancelled" {
+  function getColumnForCard(planOrderId: string): TrackerColumn {
     const order = planOrders.find((o) => o.id === planOrderId);
     if (order?.status === "cancelled") return "cancelled";
-    if (order?.status === "received") return "in_stock";
+    if (order?.status === "received") {
+      const items = checklists[planOrderId] || [];
+      const invReceived = items.find(c => c.checklist_key === "invoice_received" && c.is_checked);
+      const invRecorded = items.find(c => c.checklist_key === "invoice_recorded" && c.is_checked);
+      if (invReceived && invRecorded) return "po_closed";
+      return "in_stock";
+    }
     const submitted = checklists[planOrderId]?.find((c) => c.checklist_key === "submitted" && c.is_checked);
     if (submitted) return "processing";
     return "plan_order";
@@ -371,20 +384,45 @@ export default function TrackerPO({ compact = false }: { compact?: boolean }) {
 
         {/* Checklists */}
         {checklistKeys.length > 0 && (
-          <div className="space-y-1 border-t border-border/40 pt-1.5 mt-1" onClick={(e) => e.stopPropagation()}>
+          <div className="space-y-1.5 border-t border-border/40 pt-1.5 mt-1" onClick={(e) => e.stopPropagation()}>
             {checklistKeys.map((key) => {
               const item = checklists[order.id]?.find((c) => c.checklist_key === key);
+              const needsDate = CHECKLIST_NEEDS_DATE[key];
+              const dateKey = `${order.id}_${key}`;
+              const pendingDate = pendingDates[dateKey] || "";
+              const canCheck = canToggleChecklist && !item?.is_checked && (!needsDate || !!pendingDate);
+
               return (
-                <div key={key} className="flex items-center gap-1.5">
-                  <Checkbox
-                    checked={!!item?.is_checked}
-                    disabled={!canToggleChecklist || !!item?.is_checked}
-                    onCheckedChange={() => toggleChecklist(order.id, key)}
-                    className="h-3 w-3"
-                  />
-                  <span className={cn("text-[10px]", item?.is_checked ? "line-through text-muted-foreground" : "text-foreground")}>
-                    {CHECKLIST_LABELS[key]}
-                  </span>
+                <div key={key} className="space-y-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <Checkbox
+                      checked={!!item?.is_checked}
+                      disabled={!canCheck}
+                      onCheckedChange={() => toggleChecklist(order.id, key, needsDate ? pendingDate : undefined)}
+                      className="h-3 w-3 shrink-0"
+                    />
+                    <span className={cn("text-[10px]", item?.is_checked ? "line-through text-muted-foreground" : "text-foreground")}>
+                      {CHECKLIST_LABELS[key]}
+                    </span>
+                    {/* Tanggal sudah diisi (read-only) */}
+                    {needsDate && item?.is_checked && item.checklist_date && (
+                      <span className="ml-auto text-[9px] text-muted-foreground font-medium tabular-nums shrink-0">
+                        {new Date(item.checklist_date).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+                      </span>
+                    )}
+                  </div>
+                  {/* Input tanggal — hanya saat belum diceklis */}
+                  {needsDate && !item?.is_checked && (
+                    <div className="ml-[18px]">
+                      <input
+                        type="date"
+                        value={pendingDate}
+                        onChange={(e) => setPendingDates(prev => ({ ...prev, [dateKey]: e.target.value }))}
+                        className="w-full text-[9px] border border-border rounded px-1.5 py-0.5 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                        placeholder="dd/mm/yyyy"
+                      />
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -392,7 +430,7 @@ export default function TrackerPO({ compact = false }: { compact?: boolean }) {
         )}
 
         {/* Archive button — In Stock only */}
-        {col === "in_stock" && canArchive && (
+        {(col === "in_stock" || col === "po_closed") && canArchive && (
           <div className="border-t border-border/40 pt-1.5 mt-1" onClick={(e) => e.stopPropagation()}>
             <Button
               variant="ghost"
