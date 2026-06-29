@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import {
   Tag, MessageSquare, Send, X, Plus, Trash2, Paperclip,
   FileText, Image, Download, Loader2, Check, Search, ExternalLink, Eye,
-  Truck, AtSign,
+  Truck, AtSign, Archive,
 } from "lucide-react";
 import { DialogFooter } from "@/components/ui/dialog";
 import { format, formatDistanceToNow } from "date-fns";
@@ -34,13 +34,23 @@ const LABEL_COLORS = [
 const CHECKLIST_LABELS_BY_COLUMN: Record<string, string[]> = {
   plan_order: ["submitted"],
   processing: ["vendor_confirmation", "payment_process"],
-  in_stock: [],
+  in_stock:   ["invoice_received", "invoice_recorded"],
+  po_closed:  ["invoice_received", "invoice_recorded"],
+  cancelled:  [],
 };
 
 const CHECKLIST_LABEL_NAMES: Record<string, string> = {
-  submitted: "Submitted",
+  submitted:           "Submitted",
   vendor_confirmation: "Vendor Confirmation",
-  payment_process: "Payment Process",
+  payment_process:     "Payment Process",
+  invoice_received:    "Invoice Received",
+  invoice_recorded:    "Invoice Recorded",
+};
+
+// Checklist keys yang butuh input tanggal
+const CHECKLIST_NEEDS_DATE: Record<string, boolean> = {
+  invoice_received: true,
+  invoice_recorded: true,
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -96,13 +106,17 @@ interface POItem {
   unit: string;
 }
 
+const ARCHIVE_COLUMNS = ["in_stock", "po_closed"];
+
 interface Props {
   planOrder: PlanOrderHeader;
   column: "plan_order" | "processing" | "in_stock" | "po_closed" | "cancelled";
   checklists: ChecklistItem[];
   canToggleChecklist: boolean;
+  canArchive: boolean;
   onClose: () => void;
-  toggleChecklist: (planOrderId: string, checklistKey: string) => Promise<void>;
+  toggleChecklist: (planOrderId: string, checklistKey: string, date?: string) => Promise<void>;
+  onArchive?: (planOrderId: string) => Promise<void>;
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -136,10 +150,13 @@ export default function TrackerPOCardDetail({
   column,
   checklists,
   canToggleChecklist,
+  canArchive,
   onClose,
   toggleChecklist,
+  onArchive,
 }: Props) {
   const { user } = useAuth();
+  const [pendingDates, setPendingDates] = useState<Record<string, string>>({});
 
   // Labels state
   const [allLabels, setAllLabels] = useState<TrackerLabel[]>([]);
@@ -776,24 +793,52 @@ export default function TrackerPOCardDetail({
                   <div className="space-y-2">
                     {checklistKeys.map((key) => {
                       const item = checklists.find((c) => c.checklist_key === key);
+                      const needsDate = CHECKLIST_NEEDS_DATE[key];
+                      const dateKey = `${planOrder.id}_${key}`;
+                      const pendingDate = pendingDates[dateKey] || "";
+                      const canCheck = canToggleChecklist && !item?.is_checked && (!needsDate || !!pendingDate);
+
                       return (
-                        <div key={key} className="flex items-start gap-2 p-2 rounded-md border border-border bg-background">
-                          <Checkbox
-                            checked={!!item?.is_checked}
-                            disabled={!canToggleChecklist || !!item?.is_checked}
-                            onCheckedChange={() => toggleChecklist(planOrder.id, key)}
-                            className="mt-0.5"
-                          />
-                          <div>
-                            <p className={`text-sm ${item?.is_checked ? "line-through text-gray-400" : "text-gray-800"}`}>
-                              {CHECKLIST_LABEL_NAMES[key]}
-                            </p>
-                            {item?.is_checked && item.checker_name && (
-                              <p className="text-xs text-gray-400">
-                                Oleh {item.checker_name}{item.checked_at ? ` · ${format(new Date(item.checked_at), "d MMM yyyy HH:mm")}` : ""}
+                        <div key={key} className="p-2 rounded-md border border-border bg-background space-y-1.5">
+                          <div className="flex items-start gap-2">
+                            <Checkbox
+                              checked={!!item?.is_checked}
+                              disabled={!canCheck}
+                              onCheckedChange={() => toggleChecklist(planOrder.id, key, needsDate ? pendingDate : undefined)}
+                              className="mt-0.5"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-sm ${item?.is_checked ? "line-through text-gray-400" : "text-gray-800"}`}>
+                                {CHECKLIST_LABEL_NAMES[key]}
                               </p>
-                            )}
+                              {/* Tanggal invoice setelah diceklis */}
+                              {needsDate && item?.is_checked && item.checklist_date && (
+                                <p className="text-xs text-primary font-medium mt-0.5">
+                                  {format(new Date(item.checklist_date), "d MMM yyyy")}
+                                </p>
+                              )}
+                              {item?.is_checked && item.checker_name && (
+                                <p className="text-xs text-gray-400">
+                                  Oleh {item.checker_name}{item.checked_at ? ` · ${format(new Date(item.checked_at), "d MMM yyyy HH:mm")}` : ""}
+                                </p>
+                              )}
+                            </div>
                           </div>
+                          {/* Input tanggal — hanya saat belum diceklis dan butuh tanggal */}
+                          {needsDate && !item?.is_checked && (
+                            <div className="ml-6">
+                              <label className="text-xs text-muted-foreground mb-0.5 block">Tanggal</label>
+                              <input
+                                type="date"
+                                value={pendingDate}
+                                onChange={(e) => setPendingDates(prev => ({ ...prev, [dateKey]: e.target.value }))}
+                                className="w-full text-sm border border-border rounded-md px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                              />
+                              {!pendingDate && canToggleChecklist && (
+                                <p className="text-[10px] text-amber-500 mt-0.5">Isi tanggal sebelum mencentang</p>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -1037,6 +1082,17 @@ export default function TrackerPOCardDetail({
         </div>
 
         <DialogFooter className="px-6 py-3 border-t flex-col sm:flex-row gap-2">
+          {ARCHIVE_COLUMNS.includes(column) && canArchive && onArchive && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-muted-foreground border-border hover:bg-muted gap-1.5"
+              onClick={async () => { await onArchive(planOrder.id); onClose(); }}
+            >
+              <Archive className="h-4 w-4" />
+              Arsipkan PO
+            </Button>
+          )}
           <Button variant="secondary" size="sm" onClick={onClose} className="sm:ml-auto">Tutup</Button>
         </DialogFooter>
       </DialogContent>

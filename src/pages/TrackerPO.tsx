@@ -429,19 +429,7 @@ export default function TrackerPO({ compact = false }: { compact?: boolean }) {
           </div>
         )}
 
-        {/* Archive button — In Stock only */}
-        {(col === "in_stock" || col === "po_closed") && canArchive && (
-          <div className="border-t border-border/40 pt-1.5 mt-1" onClick={(e) => e.stopPropagation()}>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 w-full text-[10px] text-muted-foreground hover:text-foreground"
-              onClick={() => archiveCard(order.id)}
-            >
-              <Archive className="h-3 w-3 mr-1" /> Dismiss / Arsipkan
-            </Button>
-          </div>
-        )}
+        {/* Archive button dipindah ke dalam dialog card detail */}
 
         {/* Footer */}
         <div className="flex items-center gap-2 border-t border-border/40 pt-1.5 mt-1.5">
@@ -871,6 +859,8 @@ export default function TrackerPO({ compact = false }: { compact?: boolean }) {
             checklists={checklists[detailCard.id] || []}
             toggleChecklist={toggleChecklist}
             canToggleChecklist={canToggleChecklist}
+            canArchive={canArchive}
+            onArchive={archiveCard}
           />
         )}
       </div>
