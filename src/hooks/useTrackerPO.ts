@@ -200,7 +200,7 @@ export function useTrackerPO() {
 
         const { error } = await supabase
           .from('po_tracker_checklists')
-          .upsert(payload, { onConflict: 'plan_order_id,checklist_key' });
+          .upsert(payload as any, { onConflict: 'plan_order_id,checklist_key' });
         if (error) throw error;
 
         const dateLabel = checklistDate
