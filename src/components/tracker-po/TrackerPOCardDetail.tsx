@@ -787,7 +787,7 @@ export default function TrackerPOCardDetail({
               {/* Checklist */}
               {checklistKeys.length > 0 && (
                 <section className="border border-border rounded-lg p-3 bg-card/50">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
                     <Check className="w-4 h-4 text-primary" /> Checklist
                   </h3>
                   <div className="space-y-2">
@@ -808,7 +808,7 @@ export default function TrackerPOCardDetail({
                               className="mt-0.5"
                             />
                             <div className="flex-1 min-w-0">
-                              <p className={`text-sm ${item?.is_checked ? "line-through text-gray-400" : "text-gray-800"}`}>
+                              <p className={`text-sm ${item?.is_checked ? "line-through text-muted-foreground" : "text-foreground"}`}>
                                 {CHECKLIST_LABEL_NAMES[key]}
                               </p>
                               {/* Tanggal invoice setelah diceklis */}
@@ -818,7 +818,7 @@ export default function TrackerPOCardDetail({
                                 </p>
                               )}
                               {item?.is_checked && item.checker_name && (
-                                <p className="text-xs text-gray-400">
+                                <p className="text-xs text-muted-foreground">
                                   Oleh {item.checker_name}{item.checked_at ? ` · ${format(new Date(item.checked_at), "d MMM yyyy HH:mm")}` : ""}
                                 </p>
                               )}
