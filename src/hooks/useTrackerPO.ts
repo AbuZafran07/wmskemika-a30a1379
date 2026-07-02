@@ -198,10 +198,34 @@ export function useTrackerPO() {
         };
         if (checklistDate) payload.checklist_date = checklistDate;
 
-        const { error } = await supabase
+        const { data: savedChecklist, error } = await supabase
           .from('po_tracker_checklists')
-          .upsert(payload as any, { onConflict: 'plan_order_id,checklist_key' });
+          .upsert(payload as any, { onConflict: 'plan_order_id,checklist_key' })
+          .select('id, plan_order_id, checklist_key, is_checked, checked_by, checked_at, checklist_date')
+          .single();
         if (error) throw error;
+
+        const optimisticItem: ChecklistItem = {
+          id: (savedChecklist as any)?.id ?? existing?.id ?? `${planOrderId}_${checklistKey}`,
+          plan_order_id: planOrderId,
+          checklist_key: checklistKey,
+          is_checked: true,
+          checked_by: user.id,
+          checked_at: (savedChecklist as any)?.checked_at ?? (payload.checked_at as string),
+          checklist_date: (savedChecklist as any)?.checklist_date ?? checklistDate ?? null,
+          checker_name: checkerName,
+        };
+
+        setChecklists((prev) => {
+          const current = prev[planOrderId] || [];
+          const exists = current.some((c) => c.checklist_key === checklistKey);
+          return {
+            ...prev,
+            [planOrderId]: exists
+              ? current.map((c) => c.checklist_key === checklistKey ? optimisticItem : c)
+              : [...current, optimisticItem],
+          };
+        });
 
         const dateLabel = checklistDate
           ? ` (${new Date(checklistDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })})`
