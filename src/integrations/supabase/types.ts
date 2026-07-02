@@ -830,6 +830,7 @@ export type Database = {
         Row: {
           checked_at: string | null
           checked_by: string | null
+          checklist_date: string | null
           checklist_key: string
           id: string
           is_checked: boolean
@@ -838,6 +839,7 @@ export type Database = {
         Insert: {
           checked_at?: string | null
           checked_by?: string | null
+          checklist_date?: string | null
           checklist_key: string
           id?: string
           is_checked?: boolean
@@ -846,6 +848,7 @@ export type Database = {
         Update: {
           checked_at?: string | null
           checked_by?: string | null
+          checklist_date?: string | null
           checklist_key?: string
           id?: string
           is_checked?: boolean
