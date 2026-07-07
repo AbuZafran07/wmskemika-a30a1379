@@ -106,7 +106,7 @@ function SalesMultiSelect({ salesList, selected, onChange }: SalesMultiSelectPro
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`flex items-center justify-between w-full px-3 py-2 text-sm border rounded-md bg-white transition-colors hover:border-primary ${
+        className={`flex items-center justify-between w-full px-3 py-2 text-sm border rounded-md bg-background transition-colors hover:border-primary ${
           noneSelected ? "text-muted-foreground" : "text-foreground"
         }`}
       >
@@ -115,10 +115,10 @@ function SalesMultiSelect({ salesList, selected, onChange }: SalesMultiSelectPro
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-52 overflow-y-auto">
+        <div className="absolute z-50 mt-1 w-full bg-popover text-popover-foreground border border-border rounded-md shadow-lg max-h-52 overflow-y-auto">
           {/* Pilih Semua / Hapus Semua */}
           <div
-            className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 border-b border-gray-100 sticky top-0 bg-white"
+            className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-accent hover:text-accent-foreground border-b border-border sticky top-0 bg-popover"
             onClick={toggleAll}
           >
             <Checkbox checked={allSelected} onCheckedChange={toggleAll} id="sales-all" />
@@ -130,7 +130,7 @@ function SalesMultiSelect({ salesList, selected, onChange }: SalesMultiSelectPro
           {salesList.map((name) => (
             <div
               key={name}
-              className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50"
+              className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-accent hover:text-accent-foreground"
               onClick={() => toggleOne(name)}
             >
               <Checkbox
@@ -296,7 +296,7 @@ export function ExportPeriodModal({
                   className={`px-3 py-1 rounded-full text-xs border transition-colors ${
                     isPresetActive(p.start, p.end)
                       ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-white text-gray-600 border-gray-300 hover:border-primary hover:text-primary"
+                      : "bg-background text-muted-foreground border-border hover:border-primary hover:text-primary"
                   }`}
                 >
                   {p.label}
