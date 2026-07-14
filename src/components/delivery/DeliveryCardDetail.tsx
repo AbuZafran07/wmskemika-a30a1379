@@ -1113,6 +1113,26 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
         const targetStatus = hasSampleLabel ? "delivered_sample" : "delivered";
         const targetLabel = hasSampleLabel ? "Delivered Sample" : "Delivered";
 
+        // Confirm delivery for any still-booked stock outs so booking_status becomes 'delivered'
+        const { data: bookedForConfirm1 } = await supabase
+          .from("stock_out_headers")
+          .select("id, stock_out_number")
+          .eq("sales_order_id", card.sales_order_id)
+          .eq("booking_status", "booked");
+        for (const so of bookedForConfirm1 || []) {
+          const { data: confirmRes, error: confirmErr } = await supabase.rpc(
+            "stock_out_confirm_delivery",
+            { p_stock_out_id: so.id }
+          );
+          if (confirmErr || !(confirmRes as any)?.success) {
+            toast.error(
+              `Gagal konfirmasi delivery ${so.stock_out_number}: ${confirmErr?.message || (confirmRes as any)?.error || "unknown error"}`
+            );
+            fetchChecklists();
+            return;
+          }
+        }
+
         await supabase
           .from("delivery_requests")
           .update({
@@ -1210,6 +1230,25 @@ export default function DeliveryCardDetail({ card, onClose, onMoveRequest, canMa
 
           const targetStatus = hasSampleLabel ? "delivered_sample" : "delivered";
           const targetLabel = hasSampleLabel ? "Delivered Sample" : "Delivered";
+
+          // Confirm delivery for any still-booked stock outs so booking_status becomes 'delivered'
+          const { data: bookedForConfirm2 } = await supabase
+            .from("stock_out_headers")
+            .select("id, stock_out_number")
+            .eq("sales_order_id", card.sales_order_id)
+            .eq("booking_status", "booked");
+          for (const so of bookedForConfirm2 || []) {
+            const { data: confirmRes, error: confirmErr } = await supabase.rpc(
+              "stock_out_confirm_delivery",
+              { p_stock_out_id: so.id }
+            );
+            if (confirmErr || !(confirmRes as any)?.success) {
+              toast.error(
+                `Gagal konfirmasi delivery ${so.stock_out_number}: ${confirmErr?.message || (confirmRes as any)?.error || "unknown error"}`
+              );
+              return;
+            }
+          }
 
           await supabase
             .from("delivery_requests")
