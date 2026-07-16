@@ -10,11 +10,12 @@ import {
   sanitizeCustomerPoNumber,
   sanitizeSalesPulseReference,
 } from '@/lib/salesPulseSync';
-import { 
-  salesOrderHeaderSchema, 
-  salesOrderItemsArraySchema, 
-  validateData 
+import {
+  salesOrderHeaderSchema,
+  salesOrderItemsArraySchema,
+  validateData
 } from '@/lib/validationSchemas';
+import { generateUniqueSPKNumber } from '@/lib/transactionNumberUtils';
 
 // Log activity to delivery_comments for all delivery cards linked to a SO
 async function logSoActivityToDeliveryCards(orderId: string, message: string) {
@@ -62,6 +63,17 @@ export interface SalesOrderHeader {
   created_by: string | null;
   approved_by: string | null;
   approved_at: string | null;
+  order_type?: 'product' | 'service';
+  service_location?: string | null;
+  service_pic_name?: string | null;
+  service_pic_phone?: string | null;
+  spk_number?: string | null;
+  spk_issued_at?: string | null;
+  spk_signed_at?: string | null;
+  target_completion_date?: string | null;
+  lab_manager_user_id?: string | null;
+  coordinator_admin_user_id?: string | null;
+  coordinator_teknis_user_id?: string | null;
   customer?: {
     id: string;
     name: string;
@@ -100,6 +112,37 @@ export interface InventoryBatch {
   batch_no: string;
   qty_on_hand: number;
   expired_date: string | null;
+}
+
+export interface CalibrationItem {
+  id: string;
+  sales_order_id: string;
+  item_number: number;
+  instrument_name: string;
+  brand_model: string | null;
+  serial_number: string | null;
+  measurement_range: string | null;
+  calibration_method: string | null;
+  sla_working_days: number;
+  unit_price: number;
+  received_date: string | null;
+  condition_notes: string | null;
+  feasibility_status: 'pending' | 'feasible' | 'not_feasible';
+  feasibility_notes: string | null;
+  certificate_number: string | null;
+  certificate_issued_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ServiceInstrumentInput {
+  instrument_name: string;
+  brand_model: string;
+  serial_number: string;
+  measurement_range: string;
+  calibration_method: string;
+  sla_working_days: number;
+  unit_price: number;
 }
 
 export function useSalesOrders() {
@@ -224,6 +267,36 @@ export function useSalesOrderItems(salesOrderId: string | null) {
       toast.error(getUserFriendlyError(error, ErrorMessages.load.error('items')));
     } else {
       setItems(data || []);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchItems();
+  }, [salesOrderId]);
+
+  return { items, loading, refetch: fetchItems };
+}
+
+export function useCalibrationItems(salesOrderId: string | null) {
+  const [items, setItems] = useState<CalibrationItem[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchItems = async () => {
+    if (!salesOrderId) {
+      setItems([]);
+      return;
+    }
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('calibration_items')
+      .select('*')
+      .eq('sales_order_id', salesOrderId)
+      .order('item_number', { ascending: true });
+    if (error) {
+      toast.error('Gagal memuat alat kalibrasi');
+    } else {
+      setItems((data || []) as CalibrationItem[]);
     }
     setLoading(false);
   };
@@ -399,6 +472,81 @@ export async function createSalesOrder(
   }
 }
 
+export async function createServiceSalesOrder(
+  header: {
+    sales_order_number: string;
+    order_date: string;
+    customer_id: string;
+    customer_po_number: string;
+    sales_name: string;
+    notes?: string | null;
+    target_completion_date: string;
+    service_location?: string | null;
+    service_pic_name?: string | null;
+    service_pic_phone?: string | null;
+    total_amount: number;
+    tax_rate: number;
+    grand_total: number;
+    status: string;
+    created_by: string | null;
+  },
+  instruments: ServiceInstrumentInput[]
+): Promise<{ success: boolean; error?: string; id?: string }> {
+  try {
+    const { data, error } = await supabase
+      .from('sales_order_headers')
+      .insert({
+        sales_order_number: header.sales_order_number,
+        order_date: header.order_date,
+        customer_id: header.customer_id,
+        customer_po_number: header.customer_po_number,
+        sales_name: header.sales_name,
+        notes: header.notes || null,
+        target_completion_date: header.target_completion_date,
+        service_location: header.service_location || null,
+        service_pic_name: header.service_pic_name || null,
+        service_pic_phone: header.service_pic_phone || null,
+        total_amount: header.total_amount,
+        tax_rate: header.tax_rate,
+        grand_total: header.grand_total,
+        status: header.status || 'draft',
+        created_by: header.created_by,
+        order_type: 'service',
+        discount: 0,
+        shipping_cost: 0,
+        allocation_type: 'Service',
+        project_instansi: header.service_location || '',
+        delivery_deadline: header.target_completion_date,
+      })
+      .select('id')
+      .single();
+
+    if (error) throw error;
+    const orderId = (data as { id: string }).id;
+
+    if (instruments.length > 0) {
+      const itemRows = instruments.map((inst, idx) => ({
+        sales_order_id: orderId,
+        item_number: idx + 1,
+        instrument_name: inst.instrument_name,
+        brand_model: inst.brand_model || null,
+        serial_number: inst.serial_number || null,
+        measurement_range: inst.measurement_range || null,
+        calibration_method: inst.calibration_method || null,
+        sla_working_days: inst.sla_working_days || 5,
+        unit_price: inst.unit_price,
+      }));
+      const { error: itemsError } = await supabase.from('calibration_items').insert(itemRows);
+      if (itemsError) throw itemsError;
+    }
+
+    return { success: true, id: orderId };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to create service order';
+    return { success: false, error: message };
+  }
+}
+
 export async function updateSalesOrder(
   orderId: string,
   header: Partial<SalesOrderHeader>,
@@ -448,11 +596,25 @@ export async function approveSalesOrder(orderId: string, approveReason?: string)
         const { data: soData } = await supabase
           .from('sales_order_headers')
           .select(`
-            id, sales_order_number, customer_po_number, sales_pulse_reference_number, order_date, grand_total, sales_name, notes,
+            id, sales_order_number, customer_po_number, sales_pulse_reference_number, order_date, grand_total, sales_name, notes, order_type,
             customer:customers(name, terms_payment)
           `)
           .eq('id', orderId)
           .single();
+
+        // Service order: generate SPK number and skip AR/SP sync
+        if ((soData as any)?.order_type === 'service') {
+          try {
+            const spkNumber = await generateUniqueSPKNumber();
+            await supabase
+              .from('sales_order_headers')
+              .update({ spk_number: spkNumber, spk_issued_at: new Date().toISOString() })
+              .eq('id', orderId);
+          } catch (spkErr) {
+            console.warn('[WMS] Gagal generate SPK number:', spkErr);
+          }
+          return result;
+        }
 
         const { data: soItemsData, error: soItemsError } = await supabase
           .from('sales_order_items')
