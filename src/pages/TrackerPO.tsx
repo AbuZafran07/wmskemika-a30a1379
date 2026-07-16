@@ -35,10 +35,10 @@ const BOARD_COLUMNS: { id: TrackerColumn; label: string; color: string }[] = [
 
 const COLUMN_CHECKLISTS: Record<string, string[]> = {
   plan_order:  ["submitted"],
-  processing:  ["submitted", "vendor_confirmation", "payment_process"],
-  in_stock:    ["submitted", "vendor_confirmation", "payment_process", "invoice_received", "invoice_recorded"],
-  po_closed:   ["submitted", "vendor_confirmation", "payment_process", "invoice_received", "invoice_recorded"],
-  cancelled:   ["submitted", "vendor_confirmation", "payment_process", "invoice_received", "invoice_recorded"],
+  processing:  ["vendor_confirmation", "payment_process"],
+  in_stock:    ["invoice_received", "invoice_recorded"],
+  po_closed:   [],
+  cancelled:   [],
 };
 
 const CHECKLIST_LABELS: Record<string, string> = {

@@ -33,10 +33,10 @@ const LABEL_COLORS = [
 
 const CHECKLIST_LABELS_BY_COLUMN: Record<string, string[]> = {
   plan_order: ["submitted"],
-  processing: ["submitted", "vendor_confirmation", "payment_process"],
-  in_stock:   ["submitted", "vendor_confirmation", "payment_process", "invoice_received", "invoice_recorded"],
-  po_closed:  ["submitted", "vendor_confirmation", "payment_process", "invoice_received", "invoice_recorded"],
-  cancelled:  ["submitted", "vendor_confirmation", "payment_process", "invoice_received", "invoice_recorded"],
+  processing: ["vendor_confirmation", "payment_process"],
+  in_stock:   ["invoice_received", "invoice_recorded"],
+  po_closed:  ["invoice_received", "invoice_recorded"],
+  cancelled:  [],
 };
 
 const CHECKLIST_LABEL_NAMES: Record<string, string> = {
