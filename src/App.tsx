@@ -41,6 +41,7 @@ import Profile from "./pages/Profile";
 
 import TrackerPO from "./pages/TrackerPO";
 import DualBoard from "./pages/DualBoard";
+import TrackerKalibrasi from "./pages/TrackerKalibrasi";
 import NotFound from "./pages/NotFound";
 import Notifications from "./pages/Notifications";
 import DeliveryOrder from "./pages/DeliveryOrder";
@@ -83,7 +84,12 @@ const App = () => (
                       <DualBoard />
                     </RouteGuard>
                   } />
-                  
+                  <Route path="/tracker-kalibrasi" element={
+                    <RouteGuard menuKey="trackerKalibrasi">
+                      <TrackerKalibrasi />
+                    </RouteGuard>
+                  } />
+
                   {/* Transactions */}
                   <Route path="/plan-order" element={
                     <RouteGuard menuKey="planOrder">

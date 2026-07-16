@@ -20,6 +20,7 @@ import {
   FileBarChart,
   ClipboardCheck,
   Rows3,
+  FlaskConical,
   History,
   Package,
   TrendingUpDown,
@@ -52,7 +53,7 @@ const menuItems: { groupKey: string; items: MenuItem[] }[] = [
       { key: "dashboard", menuKey: "dashboard", labelKey: "menu.dashboard", icon: LayoutDashboard, href: "/dashboard" },
       { key: "requestDelivery", menuKey: "requestDelivery", labelKey: "menu.requestDelivery", subLabelKey: "menu.requestDeliverySub", icon: Truck, href: "/request-delivery" },
       { key: "trackerPO", menuKey: "trackerPO", labelKey: "menu.trackerPO", subLabelKey: "menu.trackerPOSub", icon: ClipboardCheck, href: "/tracker-po" },
-      { key: "dualBoard", menuKey: "dualBoard", labelKey: "menu.dualBoard", subLabelKey: "menu.dualBoardSub", icon: Rows3, href: "/dual-board" },
+      { key: "trackerKalibrasi", menuKey: "trackerKalibrasi", labelKey: "menu.trackerKalibrasi", subLabelKey: "menu.trackerKalibrasiSub", icon: FlaskConical, href: "/tracker-kalibrasi" },
     ],
   },
   {

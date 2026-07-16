@@ -60,7 +60,8 @@ export type MenuKey =
   | 'adjustmentLog'
   | 'auditLog'
   | 'trackerPO'
-  | 'dualBoard';
+  | 'dualBoard'
+  | 'trackerKalibrasi';
 
 /**
  * Menu visibility configuration
@@ -104,6 +105,7 @@ export const MENU_ACCESS: Record<MenuKey, UserRole[]> = {
   auditLog: ['super_admin', 'admin'], // Purchasing not allowed
   trackerPO: ['super_admin', 'admin', 'finance', 'purchasing', 'warehouse', 'viewer'],
   dualBoard: ['super_admin', 'admin', 'finance', 'purchasing', 'warehouse', 'viewer'],
+  trackerKalibrasi: ['super_admin', 'admin', 'finance', 'purchasing', 'warehouse', 'sales', 'viewer'],
 };
 
 // ============================================================================
@@ -417,6 +419,7 @@ export const ROUTE_TO_MENU: Record<string, MenuKey> = {
   '/reports/audit': 'auditLog',
   '/tracker-po': 'trackerPO',
   '/dual-board': 'dualBoard',
+  '/tracker-kalibrasi': 'trackerKalibrasi',
 };
 
 /**
