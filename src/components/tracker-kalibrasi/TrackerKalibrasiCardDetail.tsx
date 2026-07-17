@@ -302,9 +302,10 @@ export default function TrackerKalibrasiCardDetail({
               </TabsList>
 
               {/* ── INFO ── */}
-              <TabsContent value="info" className="flex-1 overflow-y-auto p-4 space-y-4 mt-0">
+              <TabsContent value="info" className="flex-1 overflow-y-auto p-4 mt-0">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {/* Customer & PIC */}
-                <div className="rounded-lg border p-4 space-y-3">
+                <div className="rounded-lg border p-3 space-y-2">
                   <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Customer</h3>
                   <div className="grid grid-cols-2 gap-3">
                     <InfoRow label="Nama Customer" value={receipt?.customer?.name} />
@@ -314,7 +315,7 @@ export default function TrackerKalibrasiCardDetail({
                 </div>
 
                 {/* PIC & Lokasi */}
-                <div className="rounded-lg border p-4 space-y-3">
+                <div className="rounded-lg border p-3 space-y-2">
                   <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">PIC & Lokasi</h3>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="flex items-start gap-2">
@@ -333,7 +334,7 @@ export default function TrackerKalibrasiCardDetail({
                 </div>
 
                 {/* Tanggal & SPK */}
-                <div className="rounded-lg border p-4 space-y-3">
+                <div className="rounded-lg border p-3 space-y-2">
                   <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Jadwal & SPK</h3>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="flex items-start gap-2">
@@ -351,7 +352,7 @@ export default function TrackerKalibrasiCardDetail({
                 </div>
 
                 {/* Ringkasan Nilai */}
-                <div className="rounded-lg border p-4 space-y-2">
+                <div className="rounded-lg border p-3 space-y-2">
                   <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Ringkasan</h3>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Jumlah Alat</span>
@@ -365,7 +366,7 @@ export default function TrackerKalibrasiCardDetail({
 
                 {/* Catatan */}
                 {receipt?.customer_request_notes && (
-                  <div className="rounded-lg border p-4 space-y-2">
+                  <div className="rounded-lg border p-3 space-y-2 md:col-span-2">
                     <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
                       <FileText className="w-3.5 h-3.5" /> Catatan Customer
                     </h3>
@@ -374,7 +375,7 @@ export default function TrackerKalibrasiCardDetail({
                 )}
 
                 {/* PDF Dokumen */}
-                <div className="rounded-lg border p-4 space-y-3">
+                <div className="rounded-lg border p-3 space-y-2 md:col-span-2">
                   <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
                     <Download className="w-3.5 h-3.5" /> Dokumen PDF
                   </h3>
@@ -418,6 +419,7 @@ export default function TrackerKalibrasiCardDetail({
                       Sertifikat (F-KAL-05)
                     </Button>
                   </div>
+                </div>
                 </div>
               </TabsContent>
 
