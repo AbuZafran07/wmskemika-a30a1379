@@ -58,6 +58,18 @@ export const COLUMN_CHECKLISTS: Record<KalibrasiV2Column, { key: string; label: 
 
 export const CHECKLIST_TOGGLE_ROLES = ['super_admin', 'admin', 'warehouse', 'purchasing'];
 
+// Legacy aliases used by TrackerKalibrasiCardDetail
+export type KalibrasiCard = KalibrasiV2Card;
+export type KalibrasiChecklist = KalibrasiV2Checklist;
+export type KalibrasiColumn = KalibrasiV2Column;
+export const KALIBRASI_COLUMN_CHECKLISTS = COLUMN_CHECKLISTS;
+export const KALIBRASI_CHECKLIST_LABELS: Record<string, string> = Object.values(
+  COLUMN_CHECKLISTS,
+).flat().reduce((acc, cur) => {
+  acc[cur.key] = cur.label;
+  return acc;
+}, {} as Record<string, string>);
+
 function computeColumn(checklists: KalibrasiV2Checklist[]): KalibrasiV2Column {
   const ok = (key: string) => checklists.some((c) => c.checklist_key === key && c.is_checked);
   if (!ok('spk_issued') || !ok('physical_check') || !ok('calibration_done')) return 'in_progress';
