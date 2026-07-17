@@ -118,12 +118,13 @@ serve(async (req) => {
     });
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims?.sub) {
+    const { data: userData, error: userError } = await supabase.auth.getUser(token);
+    if (userError || !userData?.user?.id) {
+      console.error("[sales-pulse-sync] auth failed:", userError?.message);
       return jsonResponse({ error: "Unauthorized" }, 401);
     }
 
-    const userId = claimsData.claims.sub;
+    const userId = userData.user.id;
     const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
