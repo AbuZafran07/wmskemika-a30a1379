@@ -172,9 +172,9 @@ export function useSalesOrders() {
         } : null
       }));
 
-      setSalesOrders(enrichedOrders);
+      setSalesOrders(enrichedOrders as any);
     } else {
-      setSalesOrders(ordersWithApprover);
+      setSalesOrders(ordersWithApprover as any);
     }
     
     setLoading(false);

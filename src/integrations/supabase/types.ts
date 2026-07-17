@@ -104,6 +104,150 @@ export type Database = {
         }
         Relationships: []
       }
+      calibration_items: {
+        Row: {
+          brand_model: string | null
+          calibration_method: string | null
+          certificate_issued_at: string | null
+          certificate_number: string | null
+          condition_notes: string | null
+          created_at: string
+          feasibility_notes: string | null
+          feasibility_status: string
+          id: string
+          instrument_name: string
+          item_number: number
+          measurement_range: string | null
+          received_date: string | null
+          sales_order_id: string
+          serial_number: string | null
+          sla_working_days: number
+          unit_price: number
+          updated_at: string
+        }
+        Insert: {
+          brand_model?: string | null
+          calibration_method?: string | null
+          certificate_issued_at?: string | null
+          certificate_number?: string | null
+          condition_notes?: string | null
+          created_at?: string
+          feasibility_notes?: string | null
+          feasibility_status?: string
+          id?: string
+          instrument_name: string
+          item_number: number
+          measurement_range?: string | null
+          received_date?: string | null
+          sales_order_id: string
+          serial_number?: string | null
+          sla_working_days?: number
+          unit_price?: number
+          updated_at?: string
+        }
+        Update: {
+          brand_model?: string | null
+          calibration_method?: string | null
+          certificate_issued_at?: string | null
+          certificate_number?: string | null
+          condition_notes?: string | null
+          created_at?: string
+          feasibility_notes?: string | null
+          feasibility_status?: string
+          id?: string
+          instrument_name?: string
+          item_number?: number
+          measurement_range?: string | null
+          received_date?: string | null
+          sales_order_id?: string
+          serial_number?: string | null
+          sla_working_days?: number
+          unit_price?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calibration_items_sales_order_id_fkey"
+            columns: ["sales_order_id"]
+            isOneToOne: false
+            referencedRelation: "sales_order_headers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calibration_tracker_checklists: {
+        Row: {
+          checked_at: string | null
+          checked_by: string | null
+          checklist_key: string
+          created_at: string
+          id: string
+          is_checked: boolean
+          sales_order_id: string
+        }
+        Insert: {
+          checked_at?: string | null
+          checked_by?: string | null
+          checklist_key: string
+          created_at?: string
+          id?: string
+          is_checked?: boolean
+          sales_order_id: string
+        }
+        Update: {
+          checked_at?: string | null
+          checked_by?: string | null
+          checklist_key?: string
+          created_at?: string
+          id?: string
+          is_checked?: boolean
+          sales_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calibration_tracker_checklists_sales_order_id_fkey"
+            columns: ["sales_order_id"]
+            isOneToOne: false
+            referencedRelation: "sales_order_headers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calibration_tracker_comments: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          sales_order_id: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          sales_order_id: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          sales_order_id?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calibration_tracker_comments_sales_order_id_fkey"
+            columns: ["sales_order_id"]
+            isOneToOne: false
+            referencedRelation: "sales_order_headers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       categories: {
         Row: {
           code: string
@@ -1297,14 +1441,21 @@ export type Database = {
           is_deleted: boolean | null
           notes: string | null
           order_date: string
+          order_type: string
           po_document_url: string | null
           project_instansi: string
           sales_name: string
           sales_order_number: string
           sales_pulse_reference_number: string | null
+          service_location: string | null
+          service_pic_name: string | null
+          service_pic_phone: string | null
           ship_to_address: string | null
           shipping_cost: number | null
+          spk_issued_at: string | null
+          spk_number: string | null
           status: string
+          target_completion_date: string | null
           tax_rate: number | null
           total_amount: number | null
           updated_at: string | null
@@ -1326,14 +1477,21 @@ export type Database = {
           is_deleted?: boolean | null
           notes?: string | null
           order_date?: string
+          order_type?: string
           po_document_url?: string | null
           project_instansi: string
           sales_name: string
           sales_order_number: string
           sales_pulse_reference_number?: string | null
+          service_location?: string | null
+          service_pic_name?: string | null
+          service_pic_phone?: string | null
           ship_to_address?: string | null
           shipping_cost?: number | null
+          spk_issued_at?: string | null
+          spk_number?: string | null
           status?: string
+          target_completion_date?: string | null
           tax_rate?: number | null
           total_amount?: number | null
           updated_at?: string | null
@@ -1355,14 +1513,21 @@ export type Database = {
           is_deleted?: boolean | null
           notes?: string | null
           order_date?: string
+          order_type?: string
           po_document_url?: string | null
           project_instansi?: string
           sales_name?: string
           sales_order_number?: string
           sales_pulse_reference_number?: string | null
+          service_location?: string | null
+          service_pic_name?: string | null
+          service_pic_phone?: string | null
           ship_to_address?: string | null
           shipping_cost?: number | null
+          spk_issued_at?: string | null
+          spk_number?: string | null
           status?: string
+          target_completion_date?: string | null
           tax_rate?: number | null
           total_amount?: number | null
           updated_at?: string | null
@@ -2168,6 +2333,10 @@ export type Database = {
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
+      }
+      guard_role_write: {
+        Args: { _allowed: Database["public"]["Enums"]["app_role"][] }
+        Returns: undefined
       }
       has_any_role: {
         Args: {
