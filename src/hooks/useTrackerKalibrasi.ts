@@ -81,7 +81,8 @@ function computeKalibrasiColumn(
 }
 
 export function useTrackerKalibrasi() {
-  const { user, role } = useAuth();
+  const { user } = useAuth();
+  const role = user?.role;
   const [cards, setCards] = useState<KalibrasiCard[]>([]);
   const [checklists, setChecklists] = useState<Record<string, KalibrasiChecklist[]>>({});
   const [loading, setLoading] = useState(true);
