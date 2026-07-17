@@ -16,6 +16,42 @@ import {
   validateData
 } from '@/lib/validationSchemas';
 
+// Fetch calibration instruments belonging to a calibration receipt (by receipt id).
+// Used by the tracker kalibrasi detail dialog.
+export function useCalibrationItems(receiptId: string | null | undefined) {
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!receiptId) {
+      setItems([]);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      const { data, error } = await supabase
+        .from('calibration_instruments')
+        .select('*')
+        .eq('calibration_receipt_id', receiptId)
+        .order('item_number', { ascending: true });
+      if (cancelled) return;
+      if (error) {
+        console.error('useCalibrationItems error:', error);
+        setItems([]);
+      } else {
+        setItems((data as any[]) || []);
+      }
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [receiptId]);
+
+  return { items, loading };
+}
+
 // Log activity to delivery_comments for all delivery cards linked to a SO
 async function logSoActivityToDeliveryCards(orderId: string, message: string) {
   try {
