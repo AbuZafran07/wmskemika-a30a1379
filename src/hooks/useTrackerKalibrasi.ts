@@ -25,6 +25,14 @@ export interface KalibrasiV2Card {
   service_pic_name: string | null;
   customer: { name: string } | null;
   instruments: { id: string; instrument_name: string; unit_price: number }[];
+  // Optional legacy fields used by TrackerKalibrasiCardDetail
+  sales_order_number?: string | null;
+  order_date?: string | null;
+  sales_name?: string | null;
+  service_location?: string | null;
+  service_pic_phone?: string | null;
+  grand_total?: number | null;
+  notes?: string | null;
 }
 
 export const COLUMN_DEFS: {
