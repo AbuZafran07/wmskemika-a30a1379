@@ -405,6 +405,9 @@ export default function SalesOrder() {
       setCustomerPhone(c.phone || "");
       setPaymentTerms(c.terms_payment || "");
       if (!shipToAddress) setShipToAddress(c.address || "");
+      // Auto-fill PIC service dari data customer
+      setServicePicName(c.pic || "");
+      setServicePicPhone(c.phone || "");
     }
   };
 
@@ -2009,17 +2012,23 @@ export default function SalesOrder() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>{language === "en" ? "PIC Customer Name" : "Nama PIC Customer"}</Label>
+                <Label>
+                  {language === "en" ? "PIC Customer Name" : "Nama PIC Customer"}
+                  <span className="ml-1 text-[10px] text-muted-foreground font-normal">(dari data customer)</span>
+                </Label>
                 <Input
-                  placeholder={language === "en" ? "Contact person at customer" : "Nama narahubung customer"}
+                  placeholder={language === "en" ? "Auto-filled from customer" : "Otomatis dari data customer"}
                   value={servicePicName}
                   onChange={(e) => setServicePicName(e.target.value)}
                 />
               </div>
               <div className="space-y-2">
-                <Label>{language === "en" ? "PIC Customer Phone" : "Telepon PIC Customer"}</Label>
+                <Label>
+                  {language === "en" ? "PIC Customer Phone" : "Telepon PIC Customer"}
+                  <span className="ml-1 text-[10px] text-muted-foreground font-normal">(dari data customer)</span>
+                </Label>
                 <Input
-                  placeholder="e.g., 08123456789"
+                  placeholder={language === "en" ? "Auto-filled from customer" : "Otomatis dari data customer"}
                   value={servicePicPhone}
                   onChange={(e) => setServicePicPhone(e.target.value)}
                 />
