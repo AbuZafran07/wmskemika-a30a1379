@@ -254,7 +254,7 @@ export default function TrackerKalibrasiCardDetail({
     <div className="fixed inset-0 z-50 flex" onClick={onClose}>
       <div className="flex-1 bg-black/30" />
       <div
-        className="w-full max-w-2xl bg-background border-l shadow-xl flex flex-col overflow-hidden"
+        className="w-full max-w-4xl bg-background border-l shadow-xl flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── header ── */}
