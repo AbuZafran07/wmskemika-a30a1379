@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import { FlaskConical, Search, Loader2, ZoomIn, ZoomOut, RefreshCw, ExternalLink, CalendarDays, MapPin, User } from "lucide-react";
+import { FlaskConical, Search, Loader2, ZoomIn, ZoomOut, RefreshCw, CalendarDays, MapPin } from "lucide-react";
 import { format, isPast, differenceInDays } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -9,8 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   useTrackerKalibrasi,
   KALIBRASI_COLUMNS,
@@ -19,7 +16,7 @@ import {
   KalibrasiCard,
   KalibrasiColumn,
 } from "@/hooks/useTrackerKalibrasi";
-import { useCalibrationItems } from "@/hooks/useSalesOrders";
+import TrackerKalibrasiCardDetail from "@/components/tracker-kalibrasi/TrackerKalibrasiCardDetail";
 
 function formatCurrency(v: number) {
   return new Intl.NumberFormat("id-ID", {
@@ -156,179 +153,6 @@ function KalibrasiKanbanCard({
   );
 }
 
-function CardDetailDialog({
-  card,
-  col,
-  checklists,
-  canToggle,
-  onToggle,
-  onClose,
-}: {
-  card: KalibrasiCard;
-  col: KalibrasiColumn;
-  checklists: import("@/hooks/useTrackerKalibrasi").KalibrasiChecklist[];
-  canToggle: boolean;
-  onToggle: (key: string) => void;
-  onClose: () => void;
-}) {
-  const navigate = useNavigate();
-  const { items: calibItems, loading: calibLoading } = useCalibrationItems(card.id);
-
-  return (
-    <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <FlaskConical className="w-4 h-4 text-blue-600" />
-            {card.spk_number || card.sales_order_number}
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          {/* Info grid */}
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <p className="text-muted-foreground text-xs">No. SO</p>
-              <p className="font-medium">{card.sales_order_number}</p>
-            </div>
-            {card.spk_number && (
-              <div>
-                <p className="text-muted-foreground text-xs">No. SPK</p>
-                <p className="font-mono font-bold text-blue-700 dark:text-blue-300">{card.spk_number}</p>
-              </div>
-            )}
-            <div>
-              <p className="text-muted-foreground text-xs">Customer</p>
-              <p className="font-medium">{card.customer?.name || "-"}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground text-xs">Sales</p>
-              <p className="font-medium">{card.sales_name}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground text-xs">Target Selesai</p>
-              <div className="flex items-center gap-2">
-                <p className="font-medium">{card.target_completion_date ? formatDateID(card.target_completion_date) : "-"}</p>
-                <DeadlineBadge date={card.target_completion_date} />
-              </div>
-            </div>
-            <div>
-              <p className="text-muted-foreground text-xs">Lokasi Servis</p>
-              <p className="font-medium">{card.service_location || "-"}</p>
-            </div>
-            {card.service_pic_name && (
-              <div>
-                <p className="text-muted-foreground text-xs">PIC Customer</p>
-                <p className="font-medium">{card.service_pic_name}</p>
-              </div>
-            )}
-            {card.service_pic_phone && (
-              <div>
-                <p className="text-muted-foreground text-xs">Telepon PIC</p>
-                <p className="font-medium">{card.service_pic_phone}</p>
-              </div>
-            )}
-            <div>
-              <p className="text-muted-foreground text-xs">Grand Total</p>
-              <p className="font-semibold text-primary">{formatCurrency(card.grand_total)}</p>
-            </div>
-            {card.notes && (
-              <div className="col-span-2">
-                <p className="text-muted-foreground text-xs">Catatan</p>
-                <p className="font-medium">{card.notes}</p>
-              </div>
-            )}
-          </div>
-
-          {/* Calibration instruments */}
-          <div>
-            <p className="text-sm font-semibold mb-2">Daftar Alat Kalibrasi</p>
-            {calibLoading ? (
-              <div className="flex justify-center py-4">
-                <Loader2 className="w-5 h-5 animate-spin text-primary" />
-              </div>
-            ) : calibItems.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-2">Tidak ada alat</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-8">#</TableHead>
-                      <TableHead>Nama Alat</TableHead>
-                      <TableHead>Merk/Model</TableHead>
-                      <TableHead>No. Seri</TableHead>
-                      <TableHead>Range Ukur</TableHead>
-                      <TableHead className="text-right">Harga</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {calibItems.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell>{item.item_number}</TableCell>
-                        <TableCell className="font-medium">{item.instrument_name}</TableCell>
-                        <TableCell>{item.brand_model || "-"}</TableCell>
-                        <TableCell>{item.serial_number || "-"}</TableCell>
-                        <TableCell>{item.measurement_range || "-"}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(Number(item.unit_price))}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </div>
-
-          {/* Checklists (all columns, read state) */}
-          <div>
-            <p className="text-sm font-semibold mb-2">Progress Checklist</p>
-            <div className="space-y-2">
-              {Object.entries(KALIBRASI_CHECKLIST_LABELS).map(([key, label]) => {
-                const item = checklists.find((c) => c.checklist_key === key);
-                const isChecked = !!item?.is_checked;
-                const colKeys = KALIBRASI_COLUMN_CHECKLISTS[col];
-                const isCurrentCol = colKeys.includes(key);
-                return (
-                  <div key={key} className="flex items-center gap-2">
-                    <Checkbox
-                      checked={isChecked}
-                      disabled={isChecked || !canToggle || !isCurrentCol}
-                      onCheckedChange={() => !isChecked && canToggle && isCurrentCol && onToggle(key)}
-                      className="w-4 h-4"
-                    />
-                    <span className={cn(
-                      "text-sm",
-                      isChecked ? "line-through text-muted-foreground" : isCurrentCol ? "font-medium" : "text-muted-foreground"
-                    )}>
-                      {label}
-                    </span>
-                    {item?.checked_at && (
-                      <span className="text-xs text-muted-foreground ml-auto">
-                        {format(new Date(item.checked_at), "dd MMM yyyy HH:mm", { locale: idLocale })}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        <DialogFooter className="gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => { onClose(); navigate(`/sales-order?id=${card.id}`); }}
-          >
-            <ExternalLink className="w-4 h-4 mr-1.5" />
-            Lihat SO
-          </Button>
-          <Button variant="outline" onClick={onClose}>Tutup</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 export default function TrackerKalibrasi() {
   const {
@@ -467,7 +291,7 @@ export default function TrackerKalibrasi() {
 
       {/* Card detail dialog */}
       {selectedCard && (
-        <CardDetailDialog
+        <TrackerKalibrasiCardDetail
           card={selectedCard}
           col={getCardColumn(selectedCard.id)}
           checklists={checklists[selectedCard.id] || []}
