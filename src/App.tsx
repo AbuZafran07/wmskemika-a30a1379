@@ -42,6 +42,7 @@ import Profile from "./pages/Profile";
 import TrackerPO from "./pages/TrackerPO";
 import DualBoard from "./pages/DualBoard";
 import TrackerKalibrasi from "./pages/TrackerKalibrasi";
+import PenerimaanKalibrasi from "./pages/PenerimaanKalibrasi";
 import NotFound from "./pages/NotFound";
 import Notifications from "./pages/Notifications";
 import DeliveryOrder from "./pages/DeliveryOrder";
@@ -82,6 +83,11 @@ const App = () => (
                   <Route path="/dual-board" element={
                     <RouteGuard menuKey="dualBoard">
                       <DualBoard />
+                    </RouteGuard>
+                  } />
+                  <Route path="/penerimaan-kalibrasi" element={
+                    <RouteGuard menuKey="penerimaanKalibrasi">
+                      <PenerimaanKalibrasi />
                     </RouteGuard>
                   } />
                   <Route path="/tracker-kalibrasi" element={

@@ -53,6 +53,12 @@ const menuItems: { groupKey: string; items: MenuItem[] }[] = [
       { key: "dashboard", menuKey: "dashboard", labelKey: "menu.dashboard", icon: LayoutDashboard, href: "/dashboard" },
       { key: "requestDelivery", menuKey: "requestDelivery", labelKey: "menu.requestDelivery", subLabelKey: "menu.requestDeliverySub", icon: Truck, href: "/request-delivery" },
       { key: "trackerPO", menuKey: "trackerPO", labelKey: "menu.trackerPO", subLabelKey: "menu.trackerPOSub", icon: ClipboardCheck, href: "/tracker-po" },
+    ],
+  },
+  {
+    groupKey: "menu.kalibrasi",
+    items: [
+      { key: "penerimaanKalibrasi", menuKey: "penerimaanKalibrasi", labelKey: "menu.penerimaanKalibrasi", subLabelKey: "menu.penerimaanKalibrasiSub", icon: ClipboardList, href: "/penerimaan-kalibrasi" },
       { key: "trackerKalibrasi", menuKey: "trackerKalibrasi", labelKey: "menu.trackerKalibrasi", subLabelKey: "menu.trackerKalibrasiSub", icon: FlaskConical, href: "/tracker-kalibrasi" },
     ],
   },

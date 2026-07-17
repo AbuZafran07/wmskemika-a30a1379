@@ -39,6 +39,7 @@ const translations: Record<Language, Record<string, string>> = {
 
     // Menu Groups
     "menu.summary": "SUMMARY",
+    "menu.kalibrasi": "CALIBRATION",
     "menu.transactions": "TRANSACTIONS",
     "menu.masterData": "MASTER DATA",
     "menu.reports": "REPORTS",
@@ -51,6 +52,8 @@ const translations: Record<Language, Record<string, string>> = {
     "menu.trackerPOSub": "Purchase Order Tracker",
     "menu.dualBoard": "Dual Board",
     "menu.dualBoardSub": "Request & PO Side by Side",
+    "menu.penerimaanKalibrasi": "Penerimaan Kalibrasi",
+    "menu.penerimaanKalibrasiSub": "Calibration Receipt",
     "menu.trackerKalibrasi": "Tracker Kalibrasi",
     "menu.trackerKalibrasiSub": "Calibration Service Tracker",
     "menu.planOrder": "Plan Order",
@@ -158,6 +161,7 @@ const translations: Record<Language, Record<string, string>> = {
 
     // Menu Groups
     "menu.summary": "RINGKASAN",
+    "menu.kalibrasi": "KALIBRASI",
     "menu.transactions": "TRANSAKSI",
     "menu.masterData": "MASTER DATA",
     "menu.reports": "LAPORAN",
@@ -170,6 +174,8 @@ const translations: Record<Language, Record<string, string>> = {
     "menu.trackerPOSub": "Purchase Order Tracker",
     "menu.dualBoard": "Dual Board",
     "menu.dualBoardSub": "Request & PO Berdampingan",
+    "menu.penerimaanKalibrasi": "Penerimaan Kalibrasi",
+    "menu.penerimaanKalibrasiSub": "Tanda Terima Kalibrasi",
     "menu.trackerKalibrasi": "Tracker Kalibrasi",
     "menu.trackerKalibrasiSub": "Calibration Service Tracker",
     "menu.planOrder": "Plan Order",

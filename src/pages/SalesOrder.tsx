@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { notifyNewSalesOrder, notifyRevisionRequest } from '@/lib/pushNotifications';
 import {
   Plus,
@@ -22,8 +22,6 @@ import {
   Package,
   FileDown,
   RotateCcw,
-  FlaskConical,
-  Wrench,
 } from "lucide-react";
 
 import { exportSectionBasedPdf } from "@/lib/pdfSectionExport";
@@ -67,8 +65,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -76,9 +73,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   useSalesOrders,
   useSalesOrderItems,
-  useCalibrationItems,
   createSalesOrder,
-  createServiceSalesOrder,
   updateSalesOrder,
   approveSalesOrder,
   cancelSalesOrder,
@@ -88,8 +83,6 @@ import {
   approveSalesOrderRevision,
   rejectSalesOrderRevision,
   SalesOrderHeader,
-  CalibrationItem,
-  ServiceInstrumentInput,
 } from "@/hooks/useSalesOrders";
 
 import { useSettings } from "@/hooks/usePlanOrders";
@@ -98,7 +91,7 @@ import { useSalesUsers } from "@/hooks/useSalesUsers";
 import { uploadFile, getSignedUrl } from "@/lib/storage";
 import { usePagination } from "@/hooks/usePagination";
 import { DataTablePagination } from "@/components/DataTablePagination";
-import { generateUniqueSalesOrderNumber, generateUniqueSPKNumber } from "@/lib/transactionNumberUtils";
+import { generateUniqueSalesOrderNumber } from "@/lib/transactionNumberUtils";
 import { supabase } from "@/integrations/supabase/client";
 import { listSalesPulseOpenReferences, sanitizeCustomerPoNumber, type SalesPulseReference } from "@/lib/salesPulseSync";
 import { toast } from "sonner";
@@ -143,16 +136,6 @@ interface OrderItem {
   stock_available: number;
 }
 
-interface InstrumentRow {
-  instrument_name: string;
-  brand_model: string;
-  serial_number: string;
-  measurement_range: string;
-  calibration_method: string;
-  sla_working_days: number;
-  unit_price: number;
-}
-
 function clampNumber(n: number, min: number, max: number) {
   if (Number.isNaN(n)) return min;
   return Math.min(max, Math.max(min, n));
@@ -180,7 +163,6 @@ function formatDateTimeID(d: Date) {
 export default function SalesOrder() {
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const navigate = useNavigate();
   const { salesOrders, loading, refetch } = useSalesOrders();
   const { customers } = useCustomers();
   const { products } = useProducts();
@@ -237,9 +219,6 @@ export default function SalesOrder() {
   const printRef = useRef<HTMLDivElement>(null);
 
   const { items: selectedOrderItems, loading: itemsLoading } = useSalesOrderItems(selectedOrder?.id || null);
-  const { items: calibrationDetailItems, loading: calibrationDetailLoading } = useCalibrationItems(
-    selectedOrder?.order_type === 'service' ? (selectedOrder?.id || null) : null
-  );
 
   // Stock Out history for the selected order
   const [stockOutHistory, setStockOutHistory] = useState<any[]>([]);
@@ -282,14 +261,6 @@ export default function SalesOrder() {
   const [customerPic, setCustomerPic] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("");
-
-  // === Service SO state ===
-  const [orderType, setOrderType] = useState<'product' | 'service'>('product');
-  const [serviceTargetCompletion, setServiceTargetCompletion] = useState("");
-  const [serviceLocation, setServiceLocation] = useState("");
-  const [servicePicName, setServicePicName] = useState("");
-  const [servicePicPhone, setServicePicPhone] = useState("");
-  const [calibrationInstruments, setCalibrationInstruments] = useState<InstrumentRow[]>([]);
 
   // Use RBAC hook for approve permission
   const canApprove = canApproveOrder("sales_order");
@@ -381,12 +352,6 @@ export default function SalesOrder() {
     setCustomerPic("");
     setCustomerPhone("");
     setPaymentTerms("");
-    setOrderType('product');
-    setServiceTargetCompletion("");
-    setServiceLocation("");
-    setServicePicName("");
-    setServicePicPhone("");
-    setCalibrationInstruments([]);
   };
 
   const handleOpenDialog = async () => {
@@ -405,9 +370,6 @@ export default function SalesOrder() {
       setCustomerPhone(c.phone || "");
       setPaymentTerms(c.terms_payment || "");
       if (!shipToAddress) setShipToAddress(c.address || "");
-      // Auto-fill PIC service dari data customer
-      setServicePicName(c.pic || "");
-      setServicePicPhone(c.phone || "");
     }
   };
 
@@ -573,14 +535,6 @@ export default function SalesOrder() {
     };
   }, [orderItems, shippingCost]);
 
-  const serviceTotals = useMemo(() => {
-    const subtotal = calibrationInstruments.reduce((sum, inst) => sum + safeNumber(inst.unit_price, 0), 0);
-    const dppPengganti = Math.round(subtotal * 11 / 12);
-    const tax = Math.round(dppPengganti * 12 / 100);
-    const grandTotal = subtotal + tax;
-    return { subtotal, dppPengganti, tax, grandTotal };
-  }, [calibrationInstruments]);
-
   // === FILE UPLOAD ===
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -658,7 +612,6 @@ export default function SalesOrder() {
   const handleEdit = async (order: SalesOrderHeader) => {
     setIsEditMode(true);
     setEditingOrderId(order.id);
-    setOrderType(order.order_type === 'service' ? 'service' : 'product');
 
     setSoNumber(order.sales_order_number);
     setOrderDate(order.order_date);
@@ -734,125 +687,10 @@ export default function SalesOrder() {
       setPaymentTerms(c.terms_payment || "");
     }
 
-    // If service order, load service fields + calibration instruments
-    if (order.order_type === 'service') {
-      setServiceTargetCompletion(order.target_completion_date || '');
-      setServiceLocation(order.service_location || '');
-      setServicePicName(order.service_pic_name || '');
-      setServicePicPhone(order.service_pic_phone || '');
-      const { data: calItems } = await supabase
-        .from('calibration_items')
-        .select('*')
-        .eq('sales_order_id', order.id)
-        .order('item_number', { ascending: true });
-      setCalibrationInstruments((calItems || []).map((item: any) => ({
-        instrument_name: item.instrument_name || '',
-        brand_model: item.brand_model || '',
-        serial_number: item.serial_number || '',
-        measurement_range: item.measurement_range || '',
-        calibration_method: item.calibration_method || '',
-        sla_working_days: item.sla_working_days || 5,
-        unit_price: Number(item.unit_price) || 0,
-      })));
-    } else {
-      setServiceTargetCompletion('');
-      setServiceLocation('');
-      setServicePicName('');
-      setServicePicPhone('');
-      setCalibrationInstruments([]);
-    }
-
     setIsDialogOpen(true);
   };
 
   const handleSave = async () => {
-    // ── Service SO branch ──
-    if (orderType === 'service') {
-      if (!customerId || !customerPoNumber || !salesName || !serviceTargetCompletion) {
-        toast.error(language === "en" ? "Please fill all required fields" : "Harap isi semua field wajib");
-        return;
-      }
-      if (calibrationInstruments.length === 0 || calibrationInstruments.some(i => !i.instrument_name.trim())) {
-        toast.error(language === "en" ? "Please add at least one instrument" : "Tambahkan minimal satu alat kalibrasi");
-        return;
-      }
-      setIsSaving(true);
-      try {
-        if (isEditMode && editingOrderId) {
-          const { error: hErr } = await supabase
-            .from('sales_order_headers')
-            .update({
-              order_date: orderDate,
-              customer_id: customerId,
-              customer_po_number: customerPoNumber,
-              sales_name: salesName,
-              notes: notes || null,
-              target_completion_date: serviceTargetCompletion,
-              service_location: serviceLocation || null,
-              service_pic_name: servicePicName || null,
-              service_pic_phone: servicePicPhone || null,
-              total_amount: serviceTotals.subtotal,
-              grand_total: serviceTotals.grandTotal,
-              project_instansi: serviceLocation || '',
-              delivery_deadline: serviceTargetCompletion,
-            })
-            .eq('id', editingOrderId);
-          if (hErr) throw hErr;
-          await supabase.from('calibration_items').delete().eq('sales_order_id', editingOrderId);
-          if (calibrationInstruments.length > 0) {
-            await supabase.from('calibration_items').insert(
-              calibrationInstruments.map((inst, idx) => ({
-                sales_order_id: editingOrderId,
-                item_number: idx + 1,
-                instrument_name: inst.instrument_name,
-                brand_model: inst.brand_model || null,
-                serial_number: inst.serial_number || null,
-                measurement_range: inst.measurement_range || null,
-                calibration_method: inst.calibration_method || null,
-                sla_working_days: inst.sla_working_days || 5,
-                unit_price: inst.unit_price,
-              }))
-            );
-          }
-          toast.success(language === "en" ? "Service Order updated" : "Order Service berhasil diupdate");
-        } else {
-          const result = await createServiceSalesOrder(
-            {
-              sales_order_number: soNumber,
-              order_date: orderDate,
-              customer_id: customerId,
-              customer_po_number: customerPoNumber,
-              sales_name: salesName,
-              notes: notes || null,
-              target_completion_date: serviceTargetCompletion,
-              service_location: serviceLocation || null,
-              service_pic_name: servicePicName || null,
-              service_pic_phone: servicePicPhone || null,
-              total_amount: serviceTotals.subtotal,
-              tax_rate: 12,
-              grand_total: serviceTotals.grandTotal,
-              status: 'draft',
-              created_by: user?.id || null,
-            },
-            calibrationInstruments
-          );
-          if (!result.success) throw new Error(result.error || 'Failed to create');
-          toast.success(language === "en" ? "Service Order created" : "Order Service berhasil dibuat");
-          notifyNewSalesOrder(soNumber, user?.id);
-        }
-        setIsDialogOpen(false);
-        setIsEditMode(false);
-        setEditingOrderId(null);
-        resetForm();
-        refetch();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : (language === "en" ? "Failed to save" : "Gagal menyimpan"));
-      }
-      setIsSaving(false);
-      return;
-    }
-
-    // ── Product SO branch (unchanged) ──
     if (!customerId || !customerPoNumber || !salesName || !allocationType || !projectInstansi || !deliveryDeadline) {
       toast.error(language === "en" ? "Please fill all required fields" : "Harap isi semua field wajib");
       return;
@@ -1401,7 +1239,6 @@ export default function SalesOrder() {
               <TableHeader>
                 <TableRow>
                   <TableHead>{language === "en" ? "SO Number" : "No. SO"}</TableHead>
-                  <TableHead>Type</TableHead>
                   <TableHead>{language === "en" ? "Date" : "Tanggal"}</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>{language === "en" ? "Customer PO" : "PO Customer"}</TableHead>
@@ -1415,7 +1252,7 @@ export default function SalesOrder() {
               <TableBody>
                 {paginatedOrders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                       {language === "en" ? "No sales orders found" : "Tidak ada sales order ditemukan"}
                     </TableCell>
                   </TableRow>
@@ -1439,17 +1276,6 @@ export default function SalesOrder() {
                         onClick={() => handleViewDetail(order)}
                       >
                         <TableCell className="font-medium">{order.sales_order_number}</TableCell>
-                        <TableCell>
-                          {order.order_type === 'service' ? (
-                            <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 text-xs">
-                              <FlaskConical className="w-3 h-3 mr-1" />Service
-                            </Badge>
-                          ) : (
-                            <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-xs">
-                              <Package className="w-3 h-3 mr-1" />Product
-                            </Badge>
-                          )}
-                        </TableCell>
                         <TableCell>{formatDateID(order.order_date)}</TableCell>
                         <TableCell>
                           <div>
@@ -1589,33 +1415,6 @@ export default function SalesOrder() {
           </DialogHeader>
 
           <div className="space-y-6 py-4">
-            {/* Order Type Selector */}
-            {!isEditMode && (
-              <div className="space-y-2">
-                <Label>{language === "en" ? "Order Type" : "Tipe Order"} *</Label>
-                <RadioGroup
-                  value={orderType}
-                  onValueChange={(v) => setOrderType(v as 'product' | 'service')}
-                  className="flex gap-6"
-                >
-                  <div className="flex items-center gap-2">
-                    <RadioGroupItem value="product" id="type-product" />
-                    <Label htmlFor="type-product" className="flex items-center gap-1.5 cursor-pointer font-normal">
-                      <Package className="w-4 h-4 text-green-600" />
-                      Product
-                    </Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <RadioGroupItem value="service" id="type-service" />
-                    <Label htmlFor="type-service" className="flex items-center gap-1.5 cursor-pointer font-normal">
-                      <FlaskConical className="w-4 h-4 text-blue-600" />
-                      Service (Kalibrasi)
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
-            )}
-
             {/* Header Row 1 */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="space-y-2">
@@ -1654,7 +1453,6 @@ export default function SalesOrder() {
               </div>
             </div>
 
-            {orderType === 'product' && (<>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="space-y-2 md:col-span-2">
                  <Label>
@@ -1987,212 +1785,7 @@ export default function SalesOrder() {
                 </CardContent>
               </Card>
             </div>
-            </>)}
 
-            {/* ── Service SO form ── */}
-            {orderType === 'service' && (<>
-            {/* Service fields */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label>{language === "en" ? "Target Completion Date" : "Tanggal Target Selesai"} *</Label>
-                <Input type="date" value={serviceTargetCompletion} onChange={(e) => setServiceTargetCompletion(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>{language === "en" ? "Service Location" : "Lokasi Servis"}</Label>
-                <Input
-                  placeholder={language === "en" ? "e.g., Lab Kemika / Customer site" : "cth. Lab Kemika / Lokasi Customer"}
-                  value={serviceLocation}
-                  onChange={(e) => setServiceLocation(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>{language === "en" ? "Notes" : "Catatan"}</Label>
-                <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>
-                  {language === "en" ? "PIC Customer Name" : "Nama PIC Customer"}
-                  <span className="ml-1 text-[10px] text-muted-foreground font-normal">(dari data customer)</span>
-                </Label>
-                <Input
-                  placeholder={language === "en" ? "Auto-filled from customer" : "Otomatis dari data customer"}
-                  value={servicePicName}
-                  onChange={(e) => setServicePicName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>
-                  {language === "en" ? "PIC Customer Phone" : "Telepon PIC Customer"}
-                  <span className="ml-1 text-[10px] text-muted-foreground font-normal">(dari data customer)</span>
-                </Label>
-                <Input
-                  placeholder={language === "en" ? "Auto-filled from customer" : "Otomatis dari data customer"}
-                  value={servicePicPhone}
-                  onChange={(e) => setServicePicPhone(e.target.value)}
-                />
-              </div>
-            </div>
-
-            {/* Calibration Instrument Table */}
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <FlaskConical className="w-4 h-4 text-blue-600" />
-                    {language === "en" ? "Calibration Instruments" : "Daftar Alat Kalibrasi"}
-                  </CardTitle>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      setCalibrationInstruments((prev) => [
-                        ...prev,
-                        { instrument_name: "", brand_model: "", serial_number: "", measurement_range: "", calibration_method: "", sla_working_days: 5, unit_price: 0 },
-                      ])
-                    }
-                  >
-                    <Plus className="w-4 h-4 mr-1" />
-                    {language === "en" ? "Add Instrument" : "Tambah Alat"}
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                {calibrationInstruments.length === 0 ? (
-                  <div className="text-center py-6 text-muted-foreground text-sm">
-                    {language === "en" ? "No instruments added yet. Click 'Add Instrument' to start." : "Belum ada alat. Klik 'Tambah Alat' untuk memulai."}
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-8">#</TableHead>
-                          <TableHead>{language === "en" ? "Instrument Name" : "Nama Alat"} *</TableHead>
-                          <TableHead>{language === "en" ? "Brand/Model" : "Merk/Model"}</TableHead>
-                          <TableHead>{language === "en" ? "Serial No." : "No. Seri"}</TableHead>
-                          <TableHead>{language === "en" ? "Range" : "Range Ukur"}</TableHead>
-                          <TableHead>SLA (hari)</TableHead>
-                          <TableHead className="text-right">{language === "en" ? "Price (Rp)" : "Harga (Rp)"}</TableHead>
-                          <TableHead className="w-8"></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {calibrationInstruments.map((inst, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
-                            <TableCell>
-                              <Input
-                                className="min-w-[140px]"
-                                value={inst.instrument_name}
-                                onChange={(e) =>
-                                  setCalibrationInstruments((prev) =>
-                                    prev.map((r, i) => (i === idx ? { ...r, instrument_name: e.target.value } : r))
-                                  )
-                                }
-                                placeholder={language === "en" ? "e.g., Thermometer" : "cth. Termometer"}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                className="min-w-[110px]"
-                                value={inst.brand_model}
-                                onChange={(e) =>
-                                  setCalibrationInstruments((prev) =>
-                                    prev.map((r, i) => (i === idx ? { ...r, brand_model: e.target.value } : r))
-                                  )
-                                }
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                className="min-w-[100px]"
-                                value={inst.serial_number}
-                                onChange={(e) =>
-                                  setCalibrationInstruments((prev) =>
-                                    prev.map((r, i) => (i === idx ? { ...r, serial_number: e.target.value } : r))
-                                  )
-                                }
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                className="min-w-[100px]"
-                                value={inst.measurement_range}
-                                onChange={(e) =>
-                                  setCalibrationInstruments((prev) =>
-                                    prev.map((r, i) => (i === idx ? { ...r, measurement_range: e.target.value } : r))
-                                  )
-                                }
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                type="number"
-                                className="w-16"
-                                value={inst.sla_working_days}
-                                onChange={(e) =>
-                                  setCalibrationInstruments((prev) =>
-                                    prev.map((r, i) => (i === idx ? { ...r, sla_working_days: parseInt(e.target.value) || 5 } : r))
-                                  )
-                                }
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                type="number"
-                                className="w-28 text-right"
-                                value={inst.unit_price}
-                                onChange={(e) =>
-                                  setCalibrationInstruments((prev) =>
-                                    prev.map((r, i) => (i === idx ? { ...r, unit_price: safeNumber(e.target.value, 0) } : r))
-                                  )
-                                }
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="iconSm"
-                                onClick={() => setCalibrationInstruments((prev) => prev.filter((_, i) => i !== idx))}
-                              >
-                                <X className="w-4 h-4 text-destructive" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Service Totals */}
-            <Card className="bg-muted/50">
-              <CardContent className="p-4 space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span className="font-medium">{formatCurrency(serviceTotals.subtotal)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">DPP Pengganti (11/12)</span>
-                  <span className="font-medium">{formatCurrency(serviceTotals.dppPengganti)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">PPN 12%</span>
-                  <span className="font-medium">{formatCurrency(serviceTotals.tax)}</span>
-                </div>
-                <div className="border-t-2 border-foreground pt-2 flex justify-between">
-                  <span className="font-bold text-lg">Grand Total</span>
-                  <span className="font-bold text-lg">{formatCurrency(serviceTotals.grandTotal)}</span>
-                </div>
-              </CardContent>
-            </Card>
-            </>)}
           </div>
 
           <DialogFooter>
@@ -2447,146 +2040,8 @@ export default function SalesOrder() {
             </div>
           </DialogHeader>
 
-          {selectedOrder && selectedOrder.order_type === 'service' && (
-            <Tabs defaultValue="info-spk" className="w-full">
-              <TabsList className="mb-4">
-                <TabsTrigger value="info-spk">Info SPK</TabsTrigger>
-                <TabsTrigger value="detail-alat">Detail Alat</TabsTrigger>
-                <TabsTrigger value="ringkasan-harga">Ringkasan Harga</TabsTrigger>
-              </TabsList>
 
-              {/* Tab 1: Info SPK */}
-              <TabsContent value="info-spk">
-                <div className="space-y-4">
-                  {selectedOrder.spk_number && (
-                    <div className="rounded-lg border border-blue-500/40 bg-blue-500/5 p-4 flex items-center gap-3">
-                      <FlaskConical className="w-5 h-5 text-blue-600 shrink-0" />
-                      <div>
-                        <p className="text-xs text-muted-foreground">No. SPK</p>
-                        <p className="font-bold text-blue-700 dark:text-blue-300 font-mono">{selectedOrder.spk_number}</p>
-                      </div>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-muted-foreground">{language === "en" ? "SO Number" : "No. SO"}</p>
-                      <p className="font-medium">{selectedOrder.sales_order_number}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">{language === "en" ? "Date" : "Tanggal"}</p>
-                      <p className="font-medium">{formatDateID(selectedOrder.order_date)}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Customer</p>
-                      <p className="font-medium">{selectedOrder.customer?.name}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">{language === "en" ? "Customer PO" : "PO Customer"}</p>
-                      <p className="font-medium">{selectedOrder.customer_po_number}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Sales</p>
-                      <p className="font-medium">{selectedOrder.sales_name}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">{language === "en" ? "Status" : "Status"}</p>
-                      <Badge variant={statusConfig[selectedOrder.status]?.variant || "draft"}>
-                        {language === "en" ? statusConfig[selectedOrder.status]?.label : statusConfig[selectedOrder.status]?.labelId}
-                      </Badge>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">{language === "en" ? "Target Completion" : "Target Selesai"}</p>
-                      <p className="font-medium">{selectedOrder.target_completion_date ? formatDateID(selectedOrder.target_completion_date) : '-'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">{language === "en" ? "Service Location" : "Lokasi Servis"}</p>
-                      <p className="font-medium">{selectedOrder.service_location || '-'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">{language === "en" ? "PIC Customer Name" : "Nama PIC Customer"}</p>
-                      <p className="font-medium">{selectedOrder.service_pic_name || '-'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">{language === "en" ? "PIC Customer Phone" : "Telepon PIC Customer"}</p>
-                      <p className="font-medium">{selectedOrder.service_pic_phone || '-'}</p>
-                    </div>
-                    {selectedOrder.notes && (
-                      <div className="col-span-2">
-                        <p className="text-sm text-muted-foreground">{language === "en" ? "Notes" : "Catatan"}</p>
-                        <p className="font-medium">{selectedOrder.notes}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </TabsContent>
-
-              {/* Tab 2: Detail Alat */}
-              <TabsContent value="detail-alat">
-                {calibrationDetailLoading ? (
-                  <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
-                ) : calibrationDetailItems.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    {language === "en" ? "No instruments found" : "Tidak ada alat kalibrasi"}
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-8">#</TableHead>
-                          <TableHead>{language === "en" ? "Instrument" : "Nama Alat"}</TableHead>
-                          <TableHead>{language === "en" ? "Brand/Model" : "Merk/Model"}</TableHead>
-                          <TableHead>{language === "en" ? "Serial No." : "No. Seri"}</TableHead>
-                          <TableHead>{language === "en" ? "Range" : "Range Ukur"}</TableHead>
-                          <TableHead>SLA</TableHead>
-                          <TableHead className="text-right">{language === "en" ? "Price" : "Harga"}</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {calibrationDetailItems.map((item) => (
-                          <TableRow key={item.id}>
-                            <TableCell>{item.item_number}</TableCell>
-                            <TableCell className="font-medium">{item.instrument_name}</TableCell>
-                            <TableCell>{item.brand_model || '-'}</TableCell>
-                            <TableCell>{item.serial_number || '-'}</TableCell>
-                            <TableCell>{item.measurement_range || '-'}</TableCell>
-                            <TableCell>{item.sla_working_days} hari</TableCell>
-                            <TableCell className="text-right">{formatCurrency(Number(item.unit_price))}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </TabsContent>
-
-              {/* Tab 3: Ringkasan Harga */}
-              <TabsContent value="ringkasan-harga">
-                <Card className="bg-muted/50">
-                  <CardContent className="p-4 space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Subtotal Kalibrasi</span>
-                      <span className="font-medium">{formatCurrency(calibrationDetailItems.reduce((s, i) => s + Number(i.unit_price), 0))}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">DPP Pengganti (11/12)</span>
-                      <span className="font-medium">{formatCurrency(Math.round(calibrationDetailItems.reduce((s, i) => s + Number(i.unit_price), 0) * 11 / 12))}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">PPN 12%</span>
-                      <span className="font-medium">{formatCurrency(Math.round(Math.round(calibrationDetailItems.reduce((s, i) => s + Number(i.unit_price), 0) * 11 / 12) * 12 / 100))}</span>
-                    </div>
-                    <div className="border-t-2 border-foreground pt-2 flex justify-between">
-                      <span className="font-bold text-lg">Grand Total</span>
-                      <span className="font-bold text-lg text-primary">{formatCurrency(selectedOrder.grand_total)}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
-          )}
-
-          {selectedOrder && selectedOrder.order_type !== 'service' && (
+          {selectedOrder && (
             <div className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -2810,26 +2265,13 @@ export default function SalesOrder() {
           )}
 
           <DialogFooter className="flex-wrap gap-2">
-            {selectedOrder?.order_type === 'service' && selectedOrder.status === 'approved' && (
-              <Button
-                variant="outline"
-                className="border-blue-500 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950"
-                onClick={() => {
-                  setIsDetailDialogOpen(false);
-                  navigate(`/tracker-kalibrasi?id=${selectedOrder.id}`);
-                }}
-              >
-                <FlaskConical className="w-4 h-4 mr-2" />
-                {language === "en" ? "Open in Tracker Kalibrasi" : "Buka di Tracker Kalibrasi"}
-              </Button>
-            )}
-            {selectedOrder?.order_type !== 'service' && selectedOrder?.status === "approved" && (
+            {selectedOrder?.status === "approved" && (
               <Button variant="outline" className="border-warning text-warning hover:bg-warning/10" onClick={() => { setRevisionReason(""); setIsRevisionDialogOpen(true); }}>
                 <RotateCcw className="w-4 h-4 mr-2" />
                 {language === "en" ? "Request Revision" : "Minta Revisi"}
               </Button>
             )}
-            {selectedOrder?.order_type !== 'service' && selectedOrder?.status === "revision_requested" && isAdminOrAbove() && (
+            {selectedOrder?.status === "revision_requested" && isAdminOrAbove() && (
               <>
                 <Button variant="outline" className="border-success text-success hover:bg-success/10" onClick={() => setIsApproveRevisionDialogOpen(true)}>
                   <CheckCircle className="w-4 h-4 mr-2" />

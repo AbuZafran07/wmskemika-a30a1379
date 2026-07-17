@@ -279,80 +279,75 @@ export async function generateUniqueDONumber(deliveryDate?: Date, maxRetries = 5
   return `${prefix}${timestamp}`;
 }
 
-// ─── SPK & Certificate Number Generators ─────────────────────────────────────
-// Format: LAB-SPK-YYYYMMDD.001 / LAB-SK-YYYYMMDD.001
+// ─── Calibration Number Generators ───────────────────────────────────────────
+// KAL-YYYYMMDD.001 / LAB-SPK-YYYYMMDD.001 / LAB-SK-YYYYMMDD.001
 
-async function getLastSPKNumber(prefix: string): Promise<string | null> {
+export async function generateUniqueKALNumber(maxRetries = 5): Promise<string> {
+  const prefix = `KAL-${getTodayDateStr()}.`;
   const { data } = await supabase
-    .from("sales_order_headers")
-    .select("spk_number")
-    .like("spk_number", `${prefix}%`)
-    .order("spk_number", { ascending: false })
+    .from("calibration_receipts")
+    .select("receipt_number")
+    .like("receipt_number", `${prefix}%`)
+    .order("receipt_number", { ascending: false })
     .limit(1);
-  return (data?.[0] as any)?.spk_number || null;
-}
+  let sequence = data?.[0]
+    ? parseInt((data[0] as any).receipt_number.slice(prefix.length), 10) + 1
+    : 1;
 
-async function checkDuplicateSPK(number: string): Promise<boolean> {
-  const { data } = await supabase
-    .from("sales_order_headers")
-    .select("id")
-    .eq("spk_number", number)
-    .limit(1);
-  return (data?.length || 0) > 0;
-}
-
-async function getLastCertNumber(prefix: string): Promise<string | null> {
-  const { data } = await supabase
-    .from("calibration_items")
-    .select("certificate_number")
-    .like("certificate_number", `${prefix}%`)
-    .order("certificate_number", { ascending: false })
-    .limit(1);
-  return (data?.[0] as any)?.certificate_number || null;
-}
-
-async function checkDuplicateCert(number: string): Promise<boolean> {
-  const { data } = await supabase
-    .from("calibration_items")
-    .select("id")
-    .eq("certificate_number", number)
-    .limit(1);
-  return (data?.length || 0) > 0;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const number = `${prefix}${String(sequence + attempt).padStart(3, "0")}`;
+    const { data: dup } = await supabase
+      .from("calibration_receipts")
+      .select("id").eq("receipt_number", number).maybeSingle();
+    if (!dup) return number;
+  }
+  return `${prefix}${Date.now().toString().slice(-4)}`;
 }
 
 export async function generateUniqueSPKNumber(maxRetries = 5): Promise<string> {
   const prefix = `LAB-SPK-${getTodayDateStr()}.`;
-  const lastNumber = await getLastSPKNumber(prefix);
-  let sequence = lastNumber
-    ? parseInt(lastNumber.slice(prefix.length), 10) + 1
+  const { data } = await supabase
+    .from("calibration_receipts")
+    .select("spk_number")
+    .like("spk_number", `${prefix}%`)
+    .order("spk_number", { ascending: false })
+    .limit(1);
+  let sequence = data?.[0]
+    ? parseInt((data[0] as any).spk_number.slice(prefix.length), 10) + 1
     : 1;
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     const number = `${prefix}${String(sequence + attempt).padStart(3, "0")}`;
-    const isDuplicate = await checkDuplicateSPK(number);
-    if (!isDuplicate) return number;
+    const { data: dup } = await supabase
+      .from("calibration_receipts")
+      .select("id").eq("spk_number", number).maybeSingle();
+    if (!dup) return number;
   }
-
-  const timestamp = Date.now().toString().slice(-4);
-  return `${prefix}${timestamp}`;
+  return `${prefix}${Date.now().toString().slice(-4)}`;
 }
 
 export async function generateUniqueCertNumber(maxRetries = 5): Promise<string> {
   const prefix = `LAB-SK-${getTodayDateStr()}.`;
-  const lastNumber = await getLastCertNumber(prefix);
-  let sequence = lastNumber
-    ? parseInt(lastNumber.slice(prefix.length), 10) + 1
+  const { data } = await supabase
+    .from("calibration_instruments")
+    .select("certificate_number")
+    .like("certificate_number", `${prefix}%`)
+    .order("certificate_number", { ascending: false })
+    .limit(1);
+  let sequence = data?.[0]
+    ? parseInt((data[0] as any).certificate_number.slice(prefix.length), 10) + 1
     : 1;
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     const number = `${prefix}${String(sequence + attempt).padStart(3, "0")}`;
-    const isDuplicate = await checkDuplicateCert(number);
-    if (!isDuplicate) return number;
+    const { data: dup } = await supabase
+      .from("calibration_instruments")
+      .select("id").eq("certificate_number", number).maybeSingle();
+    if (!dup) return number;
   }
-
-  const timestamp = Date.now().toString().slice(-4);
-  return `${prefix}${timestamp}`;
+  return `${prefix}${Date.now().toString().slice(-4)}`;
 }
+
 
 /**
  * Get the date for a delivery column (pengiriman_senin..jumat) in the current week
