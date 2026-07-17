@@ -3,136 +3,120 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
-export type KalibrasiColumn =
-  | 'spk_masuk'
-  | 'alat_diterima'
-  | 'cek_kelayakan'
-  | 'kalibrasi'
-  | 'sertifikasi'
-  | 'selesai';
+export type KalibrasiV2Column = 'in_progress' | 'completed' | 'invoiced' | 'selesai';
 
-export interface KalibrasiChecklist {
+export interface KalibrasiV2Checklist {
   id: string;
-  sales_order_id: string;
+  calibration_receipt_id: string;
   checklist_key: string;
   is_checked: boolean;
   checked_by: string | null;
   checked_at: string | null;
 }
 
-export interface KalibrasiCard {
+export interface KalibrasiV2Card {
   id: string;
-  sales_order_number: string;
+  receipt_number: string;
   spk_number: string | null;
-  order_date: string;
-  customer: { name: string } | null;
-  sales_name: string;
+  received_date: string;
   target_completion_date: string | null;
-  service_location: string | null;
-  service_pic_name: string | null;
-  service_pic_phone: string | null;
-  grand_total: number;
   status: string;
-  created_by: string | null;
-  notes: string | null;
+  archived: boolean;
+  service_pic_name: string | null;
+  customer: { name: string } | null;
+  instruments: { id: string; instrument_name: string; unit_price: number }[];
 }
 
-export const KALIBRASI_COLUMNS: { id: KalibrasiColumn; label: string; color: string }[] = [
-  { id: 'spk_masuk',     label: 'SPK Masuk',      color: 'bg-blue-600'   },
-  { id: 'alat_diterima', label: 'Alat Diterima',  color: 'bg-yellow-600' },
-  { id: 'cek_kelayakan', label: 'Cek Kelayakan',  color: 'bg-orange-600' },
-  { id: 'kalibrasi',     label: 'Kalibrasi',      color: 'bg-purple-600' },
-  { id: 'sertifikasi',   label: 'Sertifikasi',    color: 'bg-teal-600'   },
-  { id: 'selesai',       label: 'Selesai',        color: 'bg-green-600'  },
+export const COLUMN_DEFS: {
+  id: KalibrasiV2Column;
+  label: string;
+  desc: string;
+  color: string;
+}[] = [
+  { id: 'in_progress', label: 'In Progress',  desc: 'SPK aktif, sedang dikalibrasi',      color: 'bg-blue-600'   },
+  { id: 'completed',   label: 'Completed',    desc: 'Kalibrasi selesai, sertifikat terbit', color: 'bg-purple-600' },
+  { id: 'invoiced',    label: 'Invoiced',     desc: 'Invoice dikirim ke customer',          color: 'bg-orange-600' },
+  { id: 'selesai',     label: 'Selesai',      desc: 'Pembayaran lunas',                     color: 'bg-green-600'  },
 ];
 
-// Checklist items shown per column (gates transition to the next column)
-export const KALIBRASI_COLUMN_CHECKLISTS: Record<KalibrasiColumn, string[]> = {
-  spk_masuk:     ['alat_diterima'],
-  alat_diterima: ['kelayakan_selesai'],
-  cek_kelayakan: ['kalibrasi_dimulai'],
-  kalibrasi:     ['kalibrasi_selesai'],
-  sertifikasi:   ['sertifikat_terbit'],
-  selesai:       [],
+export const COLUMN_CHECKLISTS: Record<KalibrasiV2Column, { key: string; label: string }[]> = {
+  in_progress: [
+    { key: 'spk_issued',       label: 'SPK diterbitkan' },
+    { key: 'physical_check',   label: 'Cek fisik alat selesai' },
+    { key: 'calibration_done', label: 'Semua alat selesai dikalibrasi' },
+  ],
+  completed: [
+    { key: 'certificate_issued', label: 'Sertifikat diterbitkan' },
+    { key: 'invoice_sent',       label: 'Invoice dikirim ke customer' },
+  ],
+  invoiced: [
+    { key: 'payment_received', label: 'Pembayaran diterima' },
+    { key: 'tools_returned',   label: 'Alat dikembalikan ke customer' },
+  ],
+  selesai: [],
 };
 
-export const KALIBRASI_CHECKLIST_LABELS: Record<string, string> = {
-  alat_diterima:     'Alat Diterima di Lab',
-  kelayakan_selesai: 'Cek Kelayakan Selesai',
-  kalibrasi_dimulai: 'Kalibrasi Dimulai',
-  kalibrasi_selesai: 'Kalibrasi Selesai',
-  sertifikat_terbit: 'Sertifikat Diterbitkan',
-};
+export const CHECKLIST_TOGGLE_ROLES = ['super_admin', 'admin', 'warehouse', 'purchasing'];
 
-export const KALIBRASI_CHECKLIST_TOGGLE_ROLES = ['super_admin', 'admin', 'warehouse'];
-
-function computeKalibrasiColumn(
-  status: string,
-  checklists: KalibrasiChecklist[],
-): KalibrasiColumn {
-  if (status !== 'approved') return 'spk_masuk';
+function computeColumn(checklists: KalibrasiV2Checklist[]): KalibrasiV2Column {
   const ok = (key: string) => checklists.some((c) => c.checklist_key === key && c.is_checked);
-  if (!ok('alat_diterima'))    return 'spk_masuk';
-  if (!ok('kelayakan_selesai'))return 'alat_diterima';
-  if (!ok('kalibrasi_dimulai'))return 'cek_kelayakan';
-  if (!ok('kalibrasi_selesai'))return 'kalibrasi';
-  if (!ok('sertifikat_terbit'))return 'sertifikasi';
+  if (!ok('spk_issued') || !ok('physical_check') || !ok('calibration_done')) return 'in_progress';
+  if (!ok('certificate_issued') || !ok('invoice_sent')) return 'completed';
+  if (!ok('payment_received') || !ok('tools_returned')) return 'invoiced';
   return 'selesai';
 }
 
 export function useTrackerKalibrasi() {
   const { user } = useAuth();
   const role = user?.role;
-  const [cards, setCards] = useState<KalibrasiCard[]>([]);
-  const [checklists, setChecklists] = useState<Record<string, KalibrasiChecklist[]>>({});
+  const [cards, setCards] = useState<KalibrasiV2Card[]>([]);
+  const [checklists, setChecklists] = useState<Record<string, KalibrasiV2Checklist[]>>({});
   const [loading, setLoading] = useState(true);
 
-  const canToggleChecklist = KALIBRASI_CHECKLIST_TOGGLE_ROLES.includes(role || '');
+  const canToggle = CHECKLIST_TOGGLE_ROLES.includes(role || '');
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: orders, error: ordersError } = await supabase
-        .from('sales_order_headers')
+      const { data: receipts, error: receiptsError } = await supabase
+        .from('calibration_receipts')
         .select(`
-          id, sales_order_number, spk_number, order_date, sales_name,
-          target_completion_date, service_location, service_pic_name, service_pic_phone,
-          grand_total, status, created_by, notes,
-          customer:customers(name)
+          id, receipt_number, spk_number, received_date, target_completion_date,
+          status, archived, service_pic_name,
+          customer:customers(name),
+          instruments:calibration_instruments(id, instrument_name, unit_price)
         `)
-        .eq('order_type', 'service')
-        .eq('status', 'approved')
-        .eq('is_deleted', false)
+        .neq('status', 'cancelled')
         .order('created_at', { ascending: false });
 
-      if (ordersError) throw ordersError;
+      if (receiptsError) throw receiptsError;
 
-      const ordersList = (orders || []) as KalibrasiCard[];
-      setCards(ordersList);
+      const list = (receipts || []) as unknown as KalibrasiV2Card[];
+      setCards(list);
 
-      if (ordersList.length === 0) {
+      if (list.length === 0) {
         setChecklists({});
         setLoading(false);
         return;
       }
 
-      const orderIds = ordersList.map((o) => o.id);
-      const { data: checklistData, error: checklistError } = await supabase
+      const ids = list.map((c) => c.id);
+      const { data: chkData, error: chkError } = await supabase
         .from('calibration_tracker_checklists')
         .select('*')
-        .in('sales_order_id', orderIds);
+        .in('calibration_receipt_id', ids);
 
-      if (checklistError) throw checklistError;
+      if (chkError) throw chkError;
 
-      const grouped: Record<string, KalibrasiChecklist[]> = {};
-      for (const c of checklistData || []) {
-        if (!grouped[c.sales_order_id]) grouped[c.sales_order_id] = [];
-        grouped[c.sales_order_id].push(c as KalibrasiChecklist);
+      const grouped: Record<string, KalibrasiV2Checklist[]> = {};
+      for (const c of (chkData || []) as KalibrasiV2Checklist[]) {
+        if (!grouped[c.calibration_receipt_id]) grouped[c.calibration_receipt_id] = [];
+        grouped[c.calibration_receipt_id].push(c);
       }
       setChecklists(grouped);
     } catch (err) {
       console.error('[TrackerKalibrasi] fetch error:', err);
-      toast.error('Gagal memuat data tracker kalibrasi');
+      toast.error('Gagal memuat tracker kalibrasi');
     }
     setLoading(false);
   }, []);
@@ -140,79 +124,104 @@ export function useTrackerKalibrasi() {
   useEffect(() => {
     fetchData();
 
-    const soChannel = supabase
-      .channel('kal-tracker-so')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_order_headers' }, fetchData)
+    const ch1 = supabase
+      .channel('kal-v2-receipts')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'calibration_receipts' }, fetchData)
       .subscribe();
 
-    const chkChannel = supabase
-      .channel('kal-tracker-chk')
+    const ch2 = supabase
+      .channel('kal-v2-checklists')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'calibration_tracker_checklists' }, fetchData)
       .subscribe();
 
     return () => {
-      supabase.removeChannel(soChannel);
-      supabase.removeChannel(chkChannel);
+      supabase.removeChannel(ch1);
+      supabase.removeChannel(ch2);
     };
   }, [fetchData]);
 
   const getColumnCards = useCallback(
-    (col: KalibrasiColumn): KalibrasiCard[] =>
-      cards.filter(
-        (card) => computeKalibrasiColumn(card.status, checklists[card.id] || []) === col,
-      ),
+    (col: KalibrasiV2Column): KalibrasiV2Card[] =>
+      cards.filter((card) => computeColumn(checklists[card.id] || []) === col),
     [cards, checklists],
   );
 
   const getCardColumn = useCallback(
-    (cardId: string): KalibrasiColumn => {
-      const card = cards.find((c) => c.id === cardId);
-      if (!card) return 'spk_masuk';
-      return computeKalibrasiColumn(card.status, checklists[cardId] || []);
-    },
-    [cards, checklists],
+    (cardId: string): KalibrasiV2Column => computeColumn(checklists[cardId] || []),
+    [checklists],
   );
 
   const toggleChecklist = useCallback(
-    async (salesOrderId: string, checklistKey: string) => {
-      if (!user?.id || !canToggleChecklist) return;
-      const existing = (checklists[salesOrderId] || []).find(
+    async (receiptId: string, checklistKey: string) => {
+      if (!user?.id || !canToggle) return;
+
+      const existing = (checklists[receiptId] || []).find(
         (c) => c.checklist_key === checklistKey,
       );
-      if (existing?.is_checked) return;
+      const newValue = existing ? !existing.is_checked : true;
+
+      // Optimistic update
+      setChecklists((prev) => {
+        const current = prev[receiptId] || [];
+        if (existing) {
+          return {
+            ...prev,
+            [receiptId]: current.map((c) =>
+              c.checklist_key === checklistKey
+                ? { ...c, is_checked: newValue, checked_by: newValue ? user.id : null }
+                : c,
+            ),
+          };
+        }
+        return {
+          ...prev,
+          [receiptId]: [
+            ...current,
+            {
+              id: `temp-${checklistKey}`,
+              calibration_receipt_id: receiptId,
+              checklist_key: checklistKey,
+              is_checked: true,
+              checked_by: user.id,
+              checked_at: new Date().toISOString(),
+            },
+          ],
+        };
+      });
 
       try {
         if (existing) {
           await supabase
             .from('calibration_tracker_checklists')
             .update({
-              is_checked: true,
-              checked_by: user.id,
-              checked_at: new Date().toISOString(),
+              is_checked: newValue,
+              checked_by: newValue ? user.id : null,
+              checked_at: newValue ? new Date().toISOString() : null,
             })
             .eq('id', existing.id);
         } else {
           await supabase.from('calibration_tracker_checklists').insert({
-            sales_order_id: salesOrderId,
+            calibration_receipt_id: receiptId,
             checklist_key: checklistKey,
             is_checked: true,
             checked_by: user.id,
             checked_at: new Date().toISOString(),
           });
         }
-        await fetchData();
-      } catch {
+      } catch (err) {
+        console.error('toggleChecklist error:', err);
         toast.error('Gagal update checklist');
+        fetchData();
       }
     },
-    [user, canToggleChecklist, checklists, fetchData],
+    [user, canToggle, checklists, fetchData],
   );
 
   return {
     cards,
     checklists,
     loading,
-    canToggleChecklist,
+    canToggle,
     getColumnCards,
     getCardColumn,
     toggleChecklist,
