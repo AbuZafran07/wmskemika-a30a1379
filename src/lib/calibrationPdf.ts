@@ -11,7 +11,6 @@ const A4_H = 297;
 const M_LEFT = 14;
 const M_RIGHT = 14;
 const CONTENT_W = A4_W - M_LEFT - M_RIGHT;
-// Kop surat header occupies top ~45mm; content starts below it
 const M_TOP = 47;
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -25,7 +24,8 @@ function fmt(v: number): string {
 
 function fmtDate(d: string | null | undefined): string {
   if (!d) return "-";
-  try { return format(new Date(d), "dd MMMM yyyy", { locale: idLocale }); } catch { return d; }
+  try { return format(new Date(d.includes("T") ? d : d + "T00:00:00"), "dd MMMM yyyy", { locale: idLocale }); }
+  catch { return d; }
 }
 
 async function imgToBase64(src: string): Promise<string | null> {
@@ -88,40 +88,43 @@ function infoRow(doc: jsPDF, label: string, value: string, y: number, labelW = 4
 
 // ── SPK PDF — F-KAL-02 ───────────────────────────────────────────────────────
 
-export async function generateSPKPdf(salesOrderId: string) {
-  // 1. Fetch data
-  const { data: so, error } = await supabase
-    .from("sales_order_headers")
+export async function generateSPKPdf(receiptId: string) {
+  // 1. Fetch receipt + customer
+  const { data: receipt, error } = await supabase
+    .from("calibration_receipts")
     .select(`
-      id, sales_order_number, spk_number, spk_issued_at, order_date,
-      target_completion_date, service_location, service_pic_name, service_pic_phone,
-      grand_total, notes, sales_name, lab_manager_user_id,
+      id, receipt_number, spk_number, spk_issued_at, spk_signed_at,
+      received_date, target_completion_date, service_location,
+      service_pic_name, service_pic_phone, customer_request_notes,
+      lab_manager_user_id,
       customer:customers(name, address, phone)
     `)
-    .eq("id", salesOrderId)
+    .eq("id", receiptId)
     .single();
 
-  if (error || !so) throw new Error("Data SO tidak ditemukan");
+  if (error || !receipt) throw new Error("Data penerimaan tidak ditemukan");
 
-  const { data: items } = await supabase
-    .from("calibration_items")
+  // 2. Fetch instruments
+  const { data: instruments } = await supabase
+    .from("calibration_instruments")
     .select("item_number, instrument_name, brand_model, serial_number, measurement_range, calibration_method, sla_working_days, unit_price")
-    .eq("sales_order_id", salesOrderId)
+    .eq("calibration_receipt_id", receiptId)
     .order("item_number");
 
-  // 2. Assets
-  const [bgData, mgr_sig] = await Promise.all([
+  // 3. Assets
+  const [bgData, mgrSig] = await Promise.all([
     imgToBase64("/kop-surat-bg.jpg"),
-    getSignatureBase64((so as any).lab_manager_user_id),
+    getSignatureBase64((receipt as any).lab_manager_user_id),
   ]);
 
-  // 3. Build PDF
+  // 4. Build PDF
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   addBg(doc, bgData);
 
   let y = M_TOP;
+  const LABEL_W = 46;
 
-  // Form number (top-right, small)
+  // Form number
   doc.setFontSize(7);
   doc.setTextColor(110, 110, 110);
   doc.text("F-KAL-02", A4_W - M_RIGHT, 10, { align: "right" });
@@ -135,10 +138,10 @@ export async function generateSPKPdf(salesOrderId: string) {
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  doc.text(`No. SPK : ${(so as any).spk_number || "-"}`, A4_W / 2, y, { align: "center" });
+  doc.text(`No. SPK : ${(receipt as any).spk_number || "-"}`, A4_W / 2, y, { align: "center" });
   y += 4.5;
   doc.text(
-    `Tanggal : ${fmtDate((so as any).spk_issued_at || (so as any).order_date)}`,
+    `Tanggal : ${fmtDate((receipt as any).spk_issued_at || (receipt as any).received_date)}`,
     A4_W / 2, y, { align: "center" },
   );
   y += 7;
@@ -149,18 +152,15 @@ export async function generateSPKPdf(salesOrderId: string) {
   y += 6;
 
   // Info rows
-  const customer = (so as any).customer;
-  const LABEL_W = 42;
-
+  const customer = (receipt as any).customer;
   const infoItems: [string, string][] = [
-    ["Customer", customer?.name || "-"],
-    ["Alamat", customer?.address || "-"],
-    ["PIC Customer", (so as any).service_pic_name || "-"],
-    ["Telepon PIC", (so as any).service_pic_phone || "-"],
-    ["Sales", (so as any).sales_name || "-"],
-    ["No. SO", (so as any).sales_order_number],
-    ["Lokasi Servis", (so as any).service_location || "-"],
-    ["Target Penyelesaian", fmtDate((so as any).target_completion_date)],
+    ["Customer",              customer?.name || "-"],
+    ["Alamat",                customer?.address || "-"],
+    ["PIC Customer",          (receipt as any).service_pic_name || "-"],
+    ["Telepon PIC",           (receipt as any).service_pic_phone || "-"],
+    ["No. Tanda Terima",      (receipt as any).receipt_number],
+    ["Lokasi Kalibrasi",      (receipt as any).service_location || "-"],
+    ["Target Penyelesaian",   fmtDate((receipt as any).target_completion_date)],
   ];
 
   for (const [label, value] of infoItems) {
@@ -176,7 +176,9 @@ export async function generateSPKPdf(salesOrderId: string) {
   doc.text("Daftar Alat Kalibrasi", M_LEFT, y);
   y += 2;
 
-  const tableBody = (items || []).map((item) => [
+  const grandTotal = (instruments || []).reduce((s, i) => s + Number(i.unit_price || 0), 0);
+
+  const tableBody = (instruments || []).map((item) => [
     item.item_number,
     item.instrument_name,
     item.brand_model || "-",
@@ -197,10 +199,9 @@ export async function generateSPKPdf(salesOrderId: string) {
     columnStyles: {
       0: { cellWidth: 8, halign: "center" },
       6: { cellWidth: 14, halign: "center" },
-      7: { halign: "right", cellWidth: 24 },
+      7: { halign: "right", cellWidth: 26 },
     },
     didDrawPage: (data) => {
-      // Add background for continuation pages only (page 1 already has it)
       if (data.pageNumber > 1) addBg(doc, bgData);
     },
   });
@@ -210,34 +211,35 @@ export async function generateSPKPdf(salesOrderId: string) {
   // Total
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
-  doc.text(`Total : ${fmt(Number((so as any).grand_total))}`, A4_W - M_RIGHT, y, { align: "right" });
+  doc.text(`Total : ${fmt(grandTotal)}`, A4_W - M_RIGHT, y, { align: "right" });
   y += 8;
 
-  // Notes
-  if ((so as any).notes) {
+  // Catatan
+  const notes = (receipt as any).customer_request_notes;
+  if (notes) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
     doc.text("Catatan:", M_LEFT, y);
     doc.setFont("helvetica", "normal");
-    const noteLines = doc.splitTextToSize((so as any).notes, CONTENT_W);
+    const noteLines = doc.splitTextToSize(notes, CONTENT_W);
     doc.text(noteLines, M_LEFT, y + 4.5);
     y += 4.5 + noteLines.length * 4.5 + 4;
   }
 
-  // Signatures — push to bottom if page has room
+  // Signatures
   const sigY = Math.max(y + 6, A4_H - 58);
   const colW = CONTENT_W / 2;
 
   doc.setFontSize(8.5);
   doc.setFont("helvetica", "normal");
 
-  // Left: customer PIC
+  // Left: PIC Customer
   doc.text("Mengetahui,", M_LEFT, sigY);
   doc.text("PIC Customer", M_LEFT, sigY + 4.5);
   doc.line(M_LEFT, sigY + 26, M_LEFT + 44, sigY + 26);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
-  doc.text((so as any).service_pic_name || "_____________________", M_LEFT, sigY + 30);
+  doc.text((receipt as any).service_pic_name || "_____________________", M_LEFT, sigY + 30);
 
   // Right: Lab Manager
   const rX = M_LEFT + colW;
@@ -246,10 +248,8 @@ export async function generateSPKPdf(salesOrderId: string) {
   doc.text("Menyetujui,", rX, sigY);
   doc.text("Lab Manager — PT. Kemika Karya Pratama", rX, sigY + 4.5);
 
-  if (mgr_sig) {
-    try {
-      doc.addImage(mgr_sig, "PNG", rX, sigY + 6.5, 36, 18);
-    } catch {}
+  if (mgrSig) {
+    try { doc.addImage(mgrSig, "PNG", rX, sigY + 6.5, 36, 18); } catch {}
   } else {
     doc.line(rX, sigY + 26, rX + 44, sigY + 26);
   }
@@ -257,44 +257,40 @@ export async function generateSPKPdf(salesOrderId: string) {
   doc.setFontSize(8);
   doc.text("(                                    )", rX, sigY + 30);
 
-  // Save
-  doc.save(`SPK-${(so as any).spk_number || (so as any).sales_order_number}.pdf`);
+  doc.save(`SPK-${(receipt as any).spk_number || (receipt as any).receipt_number}.pdf`);
 }
 
 // ── Certificate PDF — F-KAL-05 ────────────────────────────────────────────────
 
-export async function generateCertificatePdf(
-  salesOrderId: string,
-  calibrationItemId?: string,
-) {
-  // 1. Fetch SO info
-  const { data: so } = await supabase
-    .from("sales_order_headers")
-    .select("id, sales_order_number, spk_number, customer:customers(name)")
-    .eq("id", salesOrderId)
+export async function generateCertificatePdf(receiptId: string, instrumentId?: string) {
+  // 1. Fetch receipt
+  const { data: receipt } = await supabase
+    .from("calibration_receipts")
+    .select("id, receipt_number, spk_number, customer:customers(name)")
+    .eq("id", receiptId)
     .single();
 
-  // 2. Fetch calibration items (all columns via * to access extra DB fields)
+  // 2. Fetch instruments
   let q = supabase
-    .from("calibration_items")
+    .from("calibration_instruments")
     .select("*")
-    .eq("sales_order_id", salesOrderId)
+    .eq("calibration_receipt_id", receiptId)
     .order("item_number");
 
-  if (calibrationItemId) q = (q as any).eq("id", calibrationItemId);
+  if (instrumentId) q = (q as any).eq("id", instrumentId);
 
-  const { data: items } = await q;
-  if (!items || items.length === 0) throw new Error("Tidak ada alat kalibrasi");
+  const { data: instruments } = await q;
+  if (!instruments || instruments.length === 0) throw new Error("Tidak ada data alat kalibrasi");
 
   // 3. Background
   const bgData = await imgToBase64("/kop-surat-bg.jpg");
+  const LABEL_W = 44;
 
   // 4. Build PDF — one page per instrument
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const LABEL_W = 42;
 
-  for (let idx = 0; idx < items.length; idx++) {
-    const item = items[idx] as any;
+  for (let idx = 0; idx < instruments.length; idx++) {
+    const item = instruments[idx] as any;
 
     if (idx > 0) doc.addPage();
     addBg(doc, bgData);
@@ -328,56 +324,48 @@ export async function generateCertificatePdf(
     doc.line(M_LEFT, y, A4_W - M_RIGHT, y);
     y += 6;
 
-    // SO / Customer context
-    const soInfoItems: [string, string][] = [
-      ["No. SPK", (so as any)?.spk_number || "-"],
-      ["Customer", (so as any)?.customer?.name || "-"],
-      ["No. SO", (so as any)?.sales_order_number || "-"],
-    ];
-
-    for (const [label, value] of soInfoItems) {
+    // Receipt/customer context
+    for (const [label, value] of [
+      ["No. SPK",        (receipt as any)?.spk_number || "-"] as [string, string],
+      ["Customer",       (receipt as any)?.customer?.name || "-"] as [string, string],
+      ["No. Tanda Terima", (receipt as any)?.receipt_number || "-"] as [string, string],
+    ]) {
       y = infoRow(doc, label, value, y, LABEL_W);
       y += 0.5;
     }
 
     y += 5;
 
-    // Section: Data Alat
+    // DATA ALAT
     y = sectionHeader(doc, "DATA ALAT", y);
-
-    const alatRows: [string, string][] = [
-      ["Nama Alat", item.instrument_name],
-      ["Merk / Model", item.brand_model || "-"],
-      ["No. Seri", item.serial_number || "-"],
-      ["Range Ukur", item.measurement_range || "-"],
-      ["Metode Kalibrasi", item.calibration_method || "-"],
-    ];
-
-    for (const [label, value] of alatRows) {
+    for (const [label, value] of [
+      ["Nama Alat",       item.instrument_name] as [string, string],
+      ["Merk / Model",    item.brand_model || "-"] as [string, string],
+      ["No. Seri",        item.serial_number || "-"] as [string, string],
+      ["Range Ukur",      item.measurement_range || "-"] as [string, string],
+      ["Metode Kalibrasi",item.calibration_method || "-"] as [string, string],
+    ]) {
       y = infoRow(doc, label, value, y, LABEL_W);
       y += 0.5;
     }
 
     y += 4;
 
-    // Section: Data Kalibrasi
+    // DATA KALIBRASI
     y = sectionHeader(doc, "DATA KALIBRASI", y);
-
-    const kalibRows: [string, string][] = [
-      ["Metode Standar", item.standard_method || "-"],
-      ["Ketertelusuran", item.traceability || "-"],
-      ["Suhu Lingkungan", item.env_temperature != null ? `${item.env_temperature} °C` : "-"],
-      ["Kelembaban", item.env_humidity != null ? `${item.env_humidity} %RH` : "-"],
-    ];
-
-    for (const [label, value] of kalibRows) {
+    for (const [label, value] of [
+      ["Metode Standar",  item.standard_method || "-"] as [string, string],
+      ["Ketertelusuran",  item.traceability || "-"] as [string, string],
+      ["Suhu Lingkungan", item.env_temperature != null ? `${item.env_temperature} °C` : "-"] as [string, string],
+      ["Kelembaban",      item.env_humidity != null ? `${item.env_humidity} %RH` : "-"] as [string, string],
+    ]) {
       y = infoRow(doc, label, value, y, LABEL_W);
       y += 0.5;
     }
 
     y += 4;
 
-    // Section: Hasil & Kesimpulan
+    // HASIL & KESIMPULAN
     y = sectionHeader(doc, "HASIL & KESIMPULAN", y);
 
     const withinLimits = !item.calibration_conclusion || item.calibration_conclusion === "within_limits";
@@ -386,13 +374,8 @@ export async function generateCertificatePdf(
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
     doc.text("Kesimpulan", M_LEFT, y);
-    doc.setFont("helvetica", "bold");
     doc.text(":", M_LEFT + LABEL_W, y);
-    if (withinLimits) {
-      doc.setTextColor(20, 120, 40);
-    } else {
-      doc.setTextColor(180, 30, 30);
-    }
+    doc.setTextColor(withinLimits ? 20 : 180, withinLimits ? 120 : 30, withinLimits ? 40 : 30);
     doc.text(conclusionText, M_LEFT + LABEL_W + 4, y);
     doc.setTextColor(0, 0, 0);
     y += 5.5;
@@ -405,7 +388,7 @@ export async function generateCertificatePdf(
     y += 6;
 
     // Signatures
-    const [tech_sig, auth_sig] = await Promise.all([
+    const [techSig, authSig] = await Promise.all([
       getSignatureBase64(item.calibration_executed_by),
       getSignatureBase64(item.certificate_authorized_by),
     ]);
@@ -419,13 +402,11 @@ export async function generateCertificatePdf(
     // Left: Teknisi
     doc.text("Dilaksanakan oleh,", M_LEFT, sigY);
     doc.text("Teknisi Kalibrasi", M_LEFT, sigY + 4.5);
-
-    if (tech_sig) {
-      try { doc.addImage(tech_sig, "PNG", M_LEFT, sigY + 6.5, 36, 18); } catch {}
+    if (techSig) {
+      try { doc.addImage(techSig, "PNG", M_LEFT, sigY + 6.5, 36, 18); } catch {}
     } else {
       doc.line(M_LEFT, sigY + 26, M_LEFT + 44, sigY + 26);
     }
-
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
     doc.text("PT. Kemika Karya Pratama", M_LEFT, sigY + 30);
@@ -436,21 +417,19 @@ export async function generateCertificatePdf(
     doc.setFontSize(8.5);
     doc.text("Disetujui oleh,", rX, sigY);
     doc.text("Manajer Lab", rX, sigY + 4.5);
-
-    if (auth_sig) {
-      try { doc.addImage(auth_sig, "PNG", rX, sigY + 6.5, 36, 18); } catch {}
+    if (authSig) {
+      try { doc.addImage(authSig, "PNG", rX, sigY + 6.5, 36, 18); } catch {}
     } else {
       doc.line(rX, sigY + 26, rX + 44, sigY + 26);
     }
-
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
     doc.text("PT. Kemika Karya Pratama", rX, sigY + 30);
   }
 
-  const fname = items.length === 1
-    ? `Sertifikat-${items[0].certificate_number || items[0].id}.pdf`
-    : `Sertifikat-${(so as any)?.spk_number || salesOrderId}.pdf`;
+  const fname = instruments.length === 1
+    ? `Sertifikat-${instruments[0].certificate_number || instruments[0].id}.pdf`
+    : `Sertifikat-${(receipt as any)?.spk_number || receiptId}.pdf`;
 
   doc.save(fname);
 }

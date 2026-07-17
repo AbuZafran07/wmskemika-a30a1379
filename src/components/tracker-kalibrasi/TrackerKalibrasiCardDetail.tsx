@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   FlaskConical, X, Send, Loader2, CheckSquare, Square,
   MapPin, Phone, User, CalendarDays, MessageSquare, Wrench, Info, ClipboardList,
-  FileText,
+  FileText, Download,
 } from "lucide-react";
+import { generateSPKPdf, generateCertificatePdf } from "@/lib/calibrationPdf";
 import { format } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -136,6 +137,7 @@ export default function TrackerKalibrasiCardDetail({
   const [loadingComments, setLoadingComments] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [sending, setSending] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState<"spk" | "cert" | null>(null);
   const commentEndRef = useRef<HTMLDivElement>(null);
 
   // ── fetch receipt + instruments ─────────────────────────────────────────
@@ -370,6 +372,53 @@ export default function TrackerKalibrasiCardDetail({
                     <p className="text-sm text-muted-foreground">{receipt.customer_request_notes}</p>
                   </div>
                 )}
+
+                {/* PDF Dokumen */}
+                <div className="rounded-lg border p-4 space-y-3">
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                    <Download className="w-3.5 h-3.5" /> Dokumen PDF
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!receiptId || pdfLoading !== null}
+                      onClick={async () => {
+                        if (!receiptId) return;
+                        setPdfLoading("spk");
+                        try { await generateSPKPdf(receiptId); }
+                        catch (e) { toast.error("Gagal generate SPK PDF"); console.error(e); }
+                        finally { setPdfLoading(null); }
+                      }}
+                      className="gap-1.5 text-xs"
+                    >
+                      {pdfLoading === "spk"
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <FileText className="w-3.5 h-3.5" />
+                      }
+                      SPK (F-KAL-02)
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!receiptId || pdfLoading !== null || instruments.length === 0}
+                      onClick={async () => {
+                        if (!receiptId) return;
+                        setPdfLoading("cert");
+                        try { await generateCertificatePdf(receiptId); }
+                        catch (e) { toast.error("Gagal generate Sertifikat PDF"); console.error(e); }
+                        finally { setPdfLoading(null); }
+                      }}
+                      className="gap-1.5 text-xs"
+                    >
+                      {pdfLoading === "cert"
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <FileText className="w-3.5 h-3.5" />
+                      }
+                      Sertifikat (F-KAL-05)
+                    </Button>
+                  </div>
+                </div>
               </TabsContent>
 
               {/* ── ALAT ── */}
