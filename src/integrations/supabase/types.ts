@@ -104,6 +104,74 @@ export type Database = {
         }
         Relationships: []
       }
+      calibration_instruments: {
+        Row: {
+          brand_model: string | null
+          calibration_method: string | null
+          calibration_receipt_id: string
+          certificate_issued_at: string | null
+          certificate_number: string | null
+          condition_notes: string | null
+          created_at: string
+          feasibility_notes: string | null
+          feasibility_status: string
+          id: string
+          instrument_name: string
+          item_number: number
+          measurement_range: string | null
+          serial_number: string | null
+          sla_working_days: number
+          unit_price: number
+          updated_at: string
+        }
+        Insert: {
+          brand_model?: string | null
+          calibration_method?: string | null
+          calibration_receipt_id: string
+          certificate_issued_at?: string | null
+          certificate_number?: string | null
+          condition_notes?: string | null
+          created_at?: string
+          feasibility_notes?: string | null
+          feasibility_status?: string
+          id?: string
+          instrument_name: string
+          item_number: number
+          measurement_range?: string | null
+          serial_number?: string | null
+          sla_working_days?: number
+          unit_price?: number
+          updated_at?: string
+        }
+        Update: {
+          brand_model?: string | null
+          calibration_method?: string | null
+          calibration_receipt_id?: string
+          certificate_issued_at?: string | null
+          certificate_number?: string | null
+          condition_notes?: string | null
+          created_at?: string
+          feasibility_notes?: string | null
+          feasibility_status?: string
+          id?: string
+          instrument_name?: string
+          item_number?: number
+          measurement_range?: string | null
+          serial_number?: string | null
+          sla_working_days?: number
+          unit_price?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calibration_instruments_calibration_receipt_id_fkey"
+            columns: ["calibration_receipt_id"]
+            isOneToOne: false
+            referencedRelation: "calibration_receipts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       calibration_items: {
         Row: {
           brand_model: string | null
@@ -175,35 +243,117 @@ export type Database = {
           },
         ]
       }
+      calibration_receipts: {
+        Row: {
+          archived: boolean
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          customer_request_notes: string | null
+          id: string
+          receipt_number: string
+          received_date: string
+          sales_order_id: string | null
+          service_location: string | null
+          service_pic_name: string | null
+          service_pic_phone: string | null
+          spk_number: string | null
+          status: string
+          target_completion_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          archived?: boolean
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          customer_request_notes?: string | null
+          id?: string
+          receipt_number: string
+          received_date?: string
+          sales_order_id?: string | null
+          service_location?: string | null
+          service_pic_name?: string | null
+          service_pic_phone?: string | null
+          spk_number?: string | null
+          status?: string
+          target_completion_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          archived?: boolean
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          customer_request_notes?: string | null
+          id?: string
+          receipt_number?: string
+          received_date?: string
+          sales_order_id?: string | null
+          service_location?: string | null
+          service_pic_name?: string | null
+          service_pic_phone?: string | null
+          spk_number?: string | null
+          status?: string
+          target_completion_date?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calibration_receipts_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calibration_receipts_sales_order_id_fkey"
+            columns: ["sales_order_id"]
+            isOneToOne: false
+            referencedRelation: "sales_order_headers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       calibration_tracker_checklists: {
         Row: {
+          calibration_receipt_id: string | null
           checked_at: string | null
           checked_by: string | null
           checklist_key: string
           created_at: string
           id: string
           is_checked: boolean
-          sales_order_id: string
+          sales_order_id: string | null
         }
         Insert: {
+          calibration_receipt_id?: string | null
           checked_at?: string | null
           checked_by?: string | null
           checklist_key: string
           created_at?: string
           id?: string
           is_checked?: boolean
-          sales_order_id: string
+          sales_order_id?: string | null
         }
         Update: {
+          calibration_receipt_id?: string | null
           checked_at?: string | null
           checked_by?: string | null
           checklist_key?: string
           created_at?: string
           id?: string
           is_checked?: boolean
-          sales_order_id?: string
+          sales_order_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "calibration_tracker_checklists_calibration_receipt_id_fkey"
+            columns: ["calibration_receipt_id"]
+            isOneToOne: false
+            referencedRelation: "calibration_receipts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "calibration_tracker_checklists_sales_order_id_fkey"
             columns: ["sales_order_id"]
@@ -215,30 +365,40 @@ export type Database = {
       }
       calibration_tracker_comments: {
         Row: {
+          calibration_receipt_id: string | null
           created_at: string
           id: string
           message: string
-          sales_order_id: string
+          sales_order_id: string | null
           type: string
           user_id: string
         }
         Insert: {
+          calibration_receipt_id?: string | null
           created_at?: string
           id?: string
           message: string
-          sales_order_id: string
+          sales_order_id?: string | null
           type?: string
           user_id: string
         }
         Update: {
+          calibration_receipt_id?: string | null
           created_at?: string
           id?: string
           message?: string
-          sales_order_id?: string
+          sales_order_id?: string | null
           type?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "calibration_tracker_comments_calibration_receipt_id_fkey"
+            columns: ["calibration_receipt_id"]
+            isOneToOne: false
+            referencedRelation: "calibration_receipts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "calibration_tracker_comments_sales_order_id_fkey"
             columns: ["sales_order_id"]

@@ -220,7 +220,7 @@ export default function TrackerKalibrasiCardDetail({
   };
 
   const allChecklistKeys = Object.keys(KALIBRASI_CHECKLIST_LABELS);
-  const colChecklistKeys = KALIBRASI_COLUMN_CHECKLISTS[col];
+  const colChecklistKeys = KALIBRASI_COLUMN_CHECKLISTS[col].map((c) => c.key);
 
   return (
     <Dialog open onOpenChange={onClose}>
