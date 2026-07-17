@@ -12,6 +12,7 @@ import {
   KalibrasiV2Column,
   KalibrasiV2Checklist,
 } from "@/hooks/useTrackerKalibrasi";
+import TrackerKalibrasiCardDetail from "@/components/tracker-kalibrasi/TrackerKalibrasiCardDetail";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -286,29 +287,15 @@ export default function TrackerKalibrasi() {
         </div>
       )}
 
-      {/* Placeholder detail panel — akan diganti di Tahap 6 */}
+      {/* Detail panel */}
       {selectedId && (
-        <div
-          className="fixed inset-0 z-50 flex"
-          onClick={() => setSelectedId(null)}
-        >
-          <div className="flex-1 bg-black/30" />
-          <div
-            className="w-full max-w-xl bg-background border-l shadow-xl p-6 overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">Detail Kalibrasi</h2>
-              <Button variant="ghost" size="sm" onClick={() => setSelectedId(null)}>
-                Tutup
-              </Button>
-            </div>
-            <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-2">
-              <FlaskConical className="w-10 h-10 opacity-20" />
-              <p className="text-sm">Detail card — segera hadir (Tahap 6)</p>
-            </div>
-          </div>
-        </div>
+        <TrackerKalibrasiCardDetail
+          receiptId={selectedId}
+          checklists={checklists[selectedId] ?? []}
+          canToggle={canToggle}
+          onToggle={toggleChecklist}
+          onClose={() => setSelectedId(null)}
+        />
       )}
     </div>
   );

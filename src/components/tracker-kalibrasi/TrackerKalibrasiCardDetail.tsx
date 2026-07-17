@@ -1,560 +1,575 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import {
-  FlaskConical, ExternalLink, Send, Loader2,
-  CheckCircle2, Clock, MapPin, Phone, CalendarDays, User,
-  MessageSquare, ClipboardList, Wrench, Info, FileDown, Award,
+  FlaskConical, X, Send, Loader2, CheckSquare, Square,
+  MapPin, Phone, User, CalendarDays, MessageSquare, Wrench, Info, ClipboardList,
+  FileText,
 } from "lucide-react";
-import { format, isPast, differenceInDays } from "date-fns";
+import { format } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { useCalibrationItems } from "@/hooks/useSalesOrders";
-import { generateSPKPdf, generateCertificatePdf } from "@/lib/calibrationPdf";
-import type {
-  KalibrasiCard,
-  KalibrasiChecklist,
-  KalibrasiColumn,
-} from "@/hooks/useTrackerKalibrasi";
 import {
-  KALIBRASI_COLUMN_CHECKLISTS,
-  KALIBRASI_CHECKLIST_LABELS,
+  COLUMN_DEFS,
+  COLUMN_CHECKLISTS,
+  KalibrasiV2Checklist,
 } from "@/hooks/useTrackerKalibrasi";
 
-// ── helpers ────────────────────────────────────────────────────────────────
+// ─── types ────────────────────────────────────────────────────────────────────
 
-function formatCurrency(v: number) {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency", currency: "IDR",
-    minimumFractionDigits: 0, maximumFractionDigits: 0,
-  }).format(Math.round(v || 0));
+interface ReceiptDetail {
+  id: string;
+  receipt_number: string;
+  spk_number: string | null;
+  spk_issued_at: string | null;
+  spk_signed_at: string | null;
+  status: string;
+  archived: boolean;
+  received_date: string;
+  target_completion_date: string | null;
+  service_location: string | null;
+  service_pic_name: string | null;
+  service_pic_phone: string | null;
+  customer_request_notes: string | null;
+  created_at: string;
+  created_by: string | null;
+  customer: { id: string; name: string; code: string; pic: string | null; phone: string | null; address: string | null } | null;
 }
 
-function formatDateID(d: string) {
-  try { return format(new Date(d), "dd MMM yyyy", { locale: idLocale }); } catch { return d; }
+interface InstrumentDetail {
+  id: string;
+  item_number: number;
+  instrument_name: string;
+  brand_model: string | null;
+  serial_number: string | null;
+  measurement_range: string | null;
+  calibration_method: string | null;
+  unit_price: number;
+  sla_working_days: number | null;
+  feasibility_status: string | null;
+  physical_condition: string | null;
+  calibration_conclusion: string | null;
+  certificate_number: string | null;
 }
 
-function formatDateTime(d: string) {
+interface KomComment {
+  id: string;
+  calibration_receipt_id: string;
+  user_id: string;
+  message: string;
+  type: string;
+  created_at: string;
+  user_name?: string;
+}
+
+// ─── helpers ─────────────────────────────────────────────────────────────────
+
+function formatRupiah(v: number) {
+  return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(v || 0);
+}
+
+function fmtDate(d: string | null) {
+  if (!d) return "-";
+  try { return format(new Date(d.includes("T") ? d : d + "T00:00:00"), "dd MMM yyyy", { locale: idLocale }); } catch { return d; }
+}
+
+function fmtDateTime(d: string | null) {
+  if (!d) return "-";
   try { return format(new Date(d), "dd MMM yyyy, HH:mm", { locale: idLocale }); } catch { return d; }
 }
 
-// ── sub-components ─────────────────────────────────────────────────────────
+const STATUS_LABEL: Record<string, string> = {
+  draft: "Draft",
+  spk_issued: "SPK Diterbitkan",
+  spk_signed: "SPK Ditandatangani",
+  converted_to_so: "Converted to SO",
+  cancelled: "Dibatalkan",
+};
 
-function InfoItem({ label, value, children }: { label: string; value?: string | null; children?: React.ReactNode }) {
-  return (
-    <div>
-      <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
-      {children ?? <p className="font-medium text-sm">{value || "-"}</p>}
-    </div>
-  );
-}
-
-function DetailPair({ label, value }: { label: string; value?: string | null }) {
-  if (!value) return null;
-  return (
-    <div>
-      <span className="text-muted-foreground">{label}: </span>
-      <span className="font-medium">{value}</span>
-    </div>
-  );
-}
+const FEASIBILITY_CFG: Record<string, { label: string; className: string }> = {
+  pending:      { label: "Menunggu",      className: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" },
+  feasible:     { label: "Layak",         className: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300" },
+  not_feasible: { label: "Tidak Layak",   className: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
+};
 
 function FeasibilityBadge({ status }: { status: string | null }) {
-  if (!status || status === "pending")
-    return <Badge variant="secondary" className="text-[10px] h-5">Menunggu</Badge>;
-  if (status === "feasible")
-    return <Badge className="text-[10px] h-5 bg-green-600">Layak</Badge>;
-  return <Badge variant="destructive" className="text-[10px] h-5">Tidak Layak</Badge>;
+  const cfg = FEASIBILITY_CFG[status ?? "pending"] ?? FEASIBILITY_CFG.pending;
+  return <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", cfg.className)}>{cfg.label}</span>;
 }
 
-function DeadlineBadge({ date }: { date: string | null }) {
-  if (!date) return null;
-  const d = new Date(date);
-  const daysLeft = differenceInDays(d, new Date());
-  const past = isPast(d);
+function InfoRow({ label, value }: { label: string; value?: string | null }) {
   return (
-    <span className={cn(
-      "text-xs font-medium",
-      past ? "text-red-500" : daysLeft <= 7 ? "text-orange-500" : "text-muted-foreground",
-    )}>
-      {past
-        ? `Terlambat ${Math.abs(daysLeft)} hari`
-        : daysLeft === 0
-        ? "Hari ini!"
-        : `${daysLeft} hari lagi`}
-    </span>
+    <div className="flex flex-col gap-0.5">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-sm font-medium">{value || "-"}</span>
+    </div>
   );
 }
 
-// ── types ──────────────────────────────────────────────────────────────────
-
-interface TrackerComment {
-  id: string;
-  user_id: string;
-  message: string;
-  created_at: string;
-  user_name: string;
-}
+// ─── main component ───────────────────────────────────────────────────────────
 
 interface Props {
-  card: KalibrasiCard;
-  col: KalibrasiColumn;
-  checklists: KalibrasiChecklist[];
+  receiptId: string | null;
+  checklists: KalibrasiV2Checklist[];
   canToggle: boolean;
-  onToggle: (key: string) => void;
+  onToggle: (receiptId: string, key: string) => void;
   onClose: () => void;
 }
 
-// ── main component ─────────────────────────────────────────────────────────
-
 export default function TrackerKalibrasiCardDetail({
-  card,
-  col,
+  receiptId,
   checklists,
   canToggle,
   onToggle,
   onClose,
 }: Props) {
-  const navigate = useNavigate();
   const { user } = useAuth();
-  const { items: calibItems, loading: calibLoading } = useCalibrationItems(card.id);
 
-  const [comments, setComments] = useState<TrackerComment[]>([]);
-  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [receipt, setReceipt] = useState<ReceiptDetail | null>(null);
+  const [instruments, setInstruments] = useState<InstrumentDetail[]>([]);
+  const [comments, setComments] = useState<KomComment[]>([]);
+  const [loadingReceipt, setLoadingReceipt] = useState(false);
+  const [loadingComments, setLoadingComments] = useState(false);
   const [newComment, setNewComment] = useState("");
-  const [sendingComment, setSendingComment] = useState(false);
-  const commentsBottomRef = useRef<HTMLDivElement>(null);
+  const [sending, setSending] = useState(false);
+  const commentEndRef = useRef<HTMLDivElement>(null);
 
-  const [downloadingSPK, setDownloadingSPK] = useState(false);
-  const [downloadingCert, setDownloadingCert] = useState(false);
+  // ── fetch receipt + instruments ─────────────────────────────────────────
 
-  const handleDownloadSPK = async () => {
-    setDownloadingSPK(true);
-    try {
-      await generateSPKPdf(card.id);
-    } catch (e: any) {
-      toast.error(e?.message || "Gagal membuat SPK PDF");
-    } finally {
-      setDownloadingSPK(false);
-    }
-  };
+  useEffect(() => {
+    if (!receiptId) { setReceipt(null); setInstruments([]); return; }
+    setLoadingReceipt(true);
 
-  const handleDownloadCert = async () => {
-    setDownloadingCert(true);
-    try {
-      await generateCertificatePdf(card.id);
-    } catch (e: any) {
-      toast.error(e?.message || "Gagal membuat Sertifikat PDF");
-    } finally {
-      setDownloadingCert(false);
-    }
-  };
+    (async () => {
+      const [{ data: rcpt }, { data: inst }] = await Promise.all([
+        supabase
+          .from("calibration_receipts")
+          .select(`
+            id, receipt_number, spk_number, spk_issued_at, spk_signed_at,
+            status, archived, received_date, target_completion_date,
+            service_location, service_pic_name, service_pic_phone,
+            customer_request_notes, created_at, created_by,
+            customer:customers(id, name, code, pic, phone, address)
+          `)
+          .eq("id", receiptId)
+          .single(),
+        supabase
+          .from("calibration_instruments")
+          .select(`
+            id, item_number, instrument_name, brand_model, serial_number,
+            measurement_range, calibration_method, unit_price, sla_working_days,
+            feasibility_status, physical_condition, calibration_conclusion, certificate_number
+          `)
+          .eq("calibration_receipt_id", receiptId)
+          .order("item_number", { ascending: true }),
+      ]);
+
+      setReceipt((rcpt as unknown as ReceiptDetail) ?? null);
+      setInstruments((inst || []) as unknown as InstrumentDetail[]);
+      setLoadingReceipt(false);
+    })();
+  }, [receiptId]);
+
+  // ── fetch comments ──────────────────────────────────────────────────────
 
   const fetchComments = useCallback(async () => {
-    setCommentsLoading(true);
+    if (!receiptId) return;
+    setLoadingComments(true);
     const { data, error } = await supabase
       .from("calibration_tracker_comments")
-      .select("id, user_id, message, created_at")
-      .eq("sales_order_id", card.id)
+      .select("*")
+      .eq("calibration_receipt_id", receiptId)
       .order("created_at", { ascending: true });
 
-    if (error) {
-      setCommentsLoading(false);
-      return;
-    }
+    if (error) { toast.error("Gagal memuat komentar"); setLoadingComments(false); return; }
 
-    const userIds = [...new Set((data || []).map((c) => c.user_id))];
-    let names: Record<string, string> = {};
+    const rawComments = (data || []) as KomComment[];
+
+    // Enrich with user names
+    const userIds = [...new Set(rawComments.map((c) => c.user_id))];
     if (userIds.length > 0) {
       const { data: profiles } = await supabase
-        .from("profiles")
+        .from("profiles_chat_view")
         .select("id, full_name")
         .in("id", userIds);
-      for (const p of profiles || []) names[p.id] = p.full_name || "Unknown";
+      const profileMap = new Map((profiles || []).map((p) => [p.id, p.full_name]));
+      setComments(rawComments.map((c) => ({ ...c, user_name: profileMap.get(c.user_id) ?? "Pengguna" })));
+    } else {
+      setComments(rawComments);
     }
+    setLoadingComments(false);
+  }, [receiptId]);
 
-    setComments((data || []).map((c) => ({ ...c, user_name: names[c.user_id] || "Unknown" })));
-    setCommentsLoading(false);
-  }, [card.id]);
+  useEffect(() => { fetchComments(); }, [fetchComments]);
 
+  // Realtime comments
   useEffect(() => {
-    fetchComments();
-
-    const channel = supabase
-      .channel(`kal-detail-${card.id}`)
-      .on("postgres_changes", {
-        event: "INSERT",
-        schema: "public",
-        table: "calibration_tracker_comments",
-        filter: `sales_order_id=eq.${card.id}`,
-      }, () => fetchComments())
+    if (!receiptId) return;
+    const ch = supabase
+      .channel(`kal-comments-${receiptId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "calibration_tracker_comments", filter: `calibration_receipt_id=eq.${receiptId}` }, fetchComments)
       .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [card.id, fetchComments]);
+    return () => { supabase.removeChannel(ch); };
+  }, [receiptId, fetchComments]);
 
   useEffect(() => {
-    commentsBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    commentEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [comments]);
 
-  const handleSendComment = async () => {
-    if (!user?.id || !newComment.trim()) return;
-    setSendingComment(true);
+  // ── send comment ────────────────────────────────────────────────────────
+
+  const sendComment = async () => {
+    if (!newComment.trim() || !user?.id || !receiptId) return;
+    setSending(true);
     const { error } = await supabase.from("calibration_tracker_comments").insert({
-      sales_order_id: card.id,
+      calibration_receipt_id: receiptId,
       user_id: user.id,
       message: newComment.trim(),
       type: "comment",
     });
-    if (error) toast.error("Gagal mengirim komentar");
-    else setNewComment("");
-    setSendingComment(false);
+    setSending(false);
+    if (error) { toast.error("Gagal kirim komentar"); return; }
+    setNewComment("");
   };
 
-  const allChecklistKeys = Object.keys(KALIBRASI_CHECKLIST_LABELS);
-  const colChecklistKeys = KALIBRASI_COLUMN_CHECKLISTS[col];
+  // ── checklist helpers ───────────────────────────────────────────────────
+
+  const isChecked = (key: string) => checklists.some((c) => c.checklist_key === key && c.is_checked);
+  const checkedBy = (key: string) => {
+    const c = checklists.find((c) => c.checklist_key === key && c.is_checked);
+    return c?.checked_at ? fmtDateTime(c.checked_at) : null;
+  };
+
+  const totalValue = instruments.reduce((s, i) => s + (i.unit_price ?? 0), 0);
+
+  if (!receiptId) return null;
 
   return (
-    <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col overflow-hidden p-0">
-        <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
-          <DialogTitle className="flex items-center gap-2 flex-wrap">
-            <FlaskConical className="w-4 h-4 text-blue-600 shrink-0" />
-            <span className="font-mono font-bold text-blue-700 dark:text-blue-300">
-              {card.spk_number || card.sales_order_number}
-            </span>
-            <span className="text-sm font-normal text-muted-foreground">
-              — {card.customer?.name || "-"}
-            </span>
-          </DialogTitle>
-        </DialogHeader>
-
-        <Tabs defaultValue="info" className="flex-1 flex flex-col min-h-0 px-6">
-          <TabsList className="shrink-0 grid grid-cols-4 w-full mt-3 mb-0">
-            <TabsTrigger value="info" className="text-xs gap-1">
-              <Info className="w-3 h-3" />Info SPK
-            </TabsTrigger>
-            <TabsTrigger value="alat" className="text-xs gap-1">
-              <Wrench className="w-3 h-3" />Alat ({calibItems.length})
-            </TabsTrigger>
-            <TabsTrigger value="checklist" className="text-xs gap-1">
-              <ClipboardList className="w-3 h-3" />Progress
-            </TabsTrigger>
-            <TabsTrigger value="komentar" className="text-xs gap-1">
-              <MessageSquare className="w-3 h-3" />
-              Komentar
-              {comments.length > 0 && (
-                <span className="text-[9px] bg-primary/10 text-primary rounded-full px-1 ml-0.5">
-                  {comments.length}
-                </span>
-              )}
-            </TabsTrigger>
-          </TabsList>
-
-          {/* ── Info SPK ─────────────────────────────────────────────── */}
-          <TabsContent value="info" className="flex-1 overflow-y-auto py-4 data-[state=inactive]:hidden">
-            <div className="space-y-4">
-              {card.spk_number && (
-                <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
-                  <p className="text-xs text-blue-600 dark:text-blue-400 font-medium mb-0.5">No. SPK</p>
-                  <p className="font-mono font-bold text-blue-700 dark:text-blue-300 text-base">
-                    {card.spk_number}
-                  </p>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-                <InfoItem label="No. SO" value={card.sales_order_number} />
-                <InfoItem label="Tanggal Order" value={formatDateID(card.order_date)} />
-                <InfoItem label="Customer" value={card.customer?.name} />
-                <InfoItem label="Sales" value={card.sales_name} />
-
-                <InfoItem label="Target Selesai">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-sm">
-                      {card.target_completion_date ? formatDateID(card.target_completion_date) : "-"}
-                    </span>
-                    <DeadlineBadge date={card.target_completion_date} />
-                  </div>
-                </InfoItem>
-
-                <InfoItem label="Lokasi Servis">
-                  <div className="flex items-center gap-1">
-                    {card.service_location && <MapPin className="w-3 h-3 text-muted-foreground shrink-0" />}
-                    <span className="font-medium text-sm">{card.service_location || "-"}</span>
-                  </div>
-                </InfoItem>
-
-                {card.service_pic_name && (
-                  <InfoItem label="PIC Customer">
-                    <div className="flex items-center gap-1">
-                      <User className="w-3 h-3 text-muted-foreground shrink-0" />
-                      <span className="font-medium text-sm">{card.service_pic_name}</span>
-                    </div>
-                  </InfoItem>
-                )}
-
-                {card.service_pic_phone && (
-                  <InfoItem label="Telepon PIC">
-                    <div className="flex items-center gap-1">
-                      <Phone className="w-3 h-3 text-muted-foreground shrink-0" />
-                      <span className="font-medium text-sm">{card.service_pic_phone}</span>
-                    </div>
-                  </InfoItem>
-                )}
-
-                <InfoItem label="Grand Total">
-                  <p className="font-semibold text-primary text-sm">{formatCurrency(card.grand_total)}</p>
-                </InfoItem>
-              </div>
-
-              {card.notes && (
+    <div className="fixed inset-0 z-50 flex" onClick={onClose}>
+      <div className="flex-1 bg-black/30" />
+      <div
+        className="w-full max-w-2xl bg-background border-l shadow-xl flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* ── header ── */}
+        {loadingReceipt ? (
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <>
+            <div className="flex items-start justify-between p-4 border-b flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <FlaskConical className="w-5 h-5 text-primary" />
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Catatan</p>
-                  <p className="text-sm bg-muted/40 rounded-lg p-2.5">{card.notes}</p>
+                  <h2 className="font-semibold text-base leading-tight">
+                    {receipt?.receipt_number ?? "-"}
+                  </h2>
+                  <p className="text-sm text-muted-foreground">{receipt?.customer?.name ?? "-"}</p>
                 </div>
-              )}
-            </div>
-          </TabsContent>
-
-          {/* ── Alat Kalibrasi ───────────────────────────────────────── */}
-          <TabsContent value="alat" className="flex-1 overflow-y-auto py-4 data-[state=inactive]:hidden">
-            {calibLoading ? (
-              <div className="flex justify-center py-10">
-                <Loader2 className="w-6 h-6 animate-spin text-primary" />
               </div>
-            ) : calibItems.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-10">Tidak ada alat kalibrasi</p>
-            ) : (
-              <div className="space-y-3">
-                {calibItems.map((item) => (
-                  <div key={item.id} className="border rounded-lg overflow-hidden">
-                    <div className="flex items-center justify-between px-3 py-2 bg-muted/40 border-b">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-[10px] text-muted-foreground bg-background border rounded px-1.5 py-0.5 font-mono shrink-0">
-                          #{item.item_number}
-                        </span>
-                        <span className="font-semibold text-sm truncate">{item.instrument_name}</span>
-                      </div>
-                      <FeasibilityBadge status={item.feasibility_status} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs p-3">
-                      <DetailPair label="Merk/Model" value={item.brand_model} />
-                      <DetailPair label="No. Seri" value={item.serial_number} />
-                      <DetailPair label="Range Ukur" value={item.measurement_range} />
-                      <DetailPair label="Metode" value={item.calibration_method} />
-                      <DetailPair
-                        label="SLA"
-                        value={item.sla_working_days != null ? `${item.sla_working_days} hari kerja` : null}
-                      />
-                      <DetailPair label="Harga" value={formatCurrency(Number(item.unit_price))} />
-                      {item.received_date && (
-                        <DetailPair label="Tgl Diterima" value={formatDateID(item.received_date)} />
-                      )}
-                      {item.condition_notes && (
-                        <div className="col-span-2">
-                          <span className="text-muted-foreground">Kondisi: </span>
-                          <span className="font-medium">{item.condition_notes}</span>
-                        </div>
-                      )}
-                      {item.feasibility_notes && (
-                        <div className="col-span-2">
-                          <span className="text-muted-foreground">Catatan Kelayakan: </span>
-                          <span className="font-medium">{item.feasibility_notes}</span>
-                        </div>
-                      )}
-                      {item.certificate_number && (
-                        <div className="col-span-2">
-                          <span className="text-muted-foreground">No. Sertifikat: </span>
-                          <span className="font-mono font-semibold text-teal-700 dark:text-teal-300">
-                            {item.certificate_number}
-                          </span>
-                        </div>
-                      )}
-                      {item.certificate_issued_at && (
-                        <DetailPair
-                          label="Sertifikat Terbit"
-                          value={formatDateTime(item.certificate_issued_at)}
-                        />
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </TabsContent>
-
-          {/* ── Progress Checklist ───────────────────────────────────── */}
-          <TabsContent value="checklist" className="flex-1 overflow-y-auto py-4 data-[state=inactive]:hidden">
-            <div className="space-y-2">
-              {allChecklistKeys.map((key) => {
-                const item = checklists.find((c) => c.checklist_key === key);
-                const isChecked = !!item?.is_checked;
-                const isCurrentCol = colChecklistKeys.includes(key);
-                const canAct = !isChecked && canToggle && isCurrentCol;
-
-                return (
-                  <div
-                    key={key}
-                    className={cn(
-                      "flex items-start gap-3 px-3 py-2.5 rounded-lg border transition-colors",
-                      isChecked
-                        ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800"
-                        : isCurrentCol
-                        ? "bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800"
-                        : "bg-muted/20 border-border/40 opacity-60",
-                    )}
-                  >
-                    <div className="mt-0.5 shrink-0">
-                      {isChecked ? (
-                        <CheckCircle2 className="w-4 h-4 text-green-600" />
-                      ) : isCurrentCol ? (
-                        <Clock className="w-4 h-4 text-orange-400" />
-                      ) : (
-                        <div className="w-4 h-4 rounded-full border-2 border-muted-foreground/30" />
-                      )}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className={cn(
-                          "text-sm font-medium",
-                          isChecked
-                            ? "text-green-700 dark:text-green-400"
-                            : isCurrentCol
-                            ? "text-orange-700 dark:text-orange-400"
-                            : "text-muted-foreground",
-                        )}>
-                          {KALIBRASI_CHECKLIST_LABELS[key]}
-                        </span>
-                        {canAct && (
-                          <Checkbox
-                            checked={false}
-                            onCheckedChange={() => onToggle(key)}
-                            className="w-4 h-4 shrink-0"
-                          />
-                        )}
-                      </div>
-                      {item?.checked_at && (
-                        <p className="text-[11px] text-muted-foreground mt-0.5">
-                          {formatDateTime(item.checked_at)}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </TabsContent>
-
-          {/* ── Komentar ─────────────────────────────────────────────── */}
-          <TabsContent value="komentar" className="flex-1 flex flex-col min-h-0 py-4 data-[state=inactive]:hidden">
-            <div className="flex-1 overflow-y-auto space-y-3 mb-3 min-h-0">
-              {commentsLoading ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                </div>
-              ) : comments.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-10">
-                  Belum ada komentar. Jadilah yang pertama!
-                </p>
-              ) : (
-                <>
-                  {comments.map((c) => (
-                    <div key={c.id} className="flex gap-2.5">
-                      <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary shrink-0">
-                        {c.user_name[0].toUpperCase()}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-baseline gap-2 flex-wrap">
-                          <span className="text-xs font-semibold">{c.user_name}</span>
-                          <span className="text-[10px] text-muted-foreground">
-                            {formatDateTime(c.created_at)}
-                          </span>
-                        </div>
-                        <p className="text-sm mt-0.5 text-foreground whitespace-pre-wrap">{c.message}</p>
-                      </div>
-                    </div>
-                  ))}
-                  <div ref={commentsBottomRef} />
-                </>
-              )}
-            </div>
-
-            {user && (
-              <div className="flex gap-2 shrink-0 border-t pt-3">
-                <Textarea
-                  placeholder="Tulis komentar... (Ctrl+Enter untuk kirim)"
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                      e.preventDefault();
-                      handleSendComment();
-                    }
-                  }}
-                  className="text-sm resize-none h-16"
-                />
-                <Button
-                  size="sm"
-                  className="self-end shrink-0"
-                  disabled={!newComment.trim() || sendingComment}
-                  onClick={handleSendComment}
-                >
-                  {sendingComment
-                    ? <Loader2 className="w-4 h-4 animate-spin" />
-                    : <Send className="w-4 h-4" />}
+              <div className="flex items-center gap-2">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+                  {STATUS_LABEL[receipt?.status ?? ""] ?? receipt?.status ?? "-"}
+                </span>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}>
+                  <X className="w-4 h-4" />
                 </Button>
               </div>
-            )}
-          </TabsContent>
-        </Tabs>
+            </div>
 
-        <DialogFooter className="shrink-0 gap-2 px-6 py-4 border-t flex-wrap">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleDownloadSPK}
-            disabled={downloadingSPK}
-            title="Download SPK PDF (F-KAL-02)"
-          >
-            {downloadingSPK
-              ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-              : <FileDown className="w-3.5 h-3.5 mr-1.5" />}
-            SPK
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleDownloadCert}
-            disabled={downloadingCert}
-            title="Download Sertifikat PDF (F-KAL-05)"
-          >
-            {downloadingCert
-              ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-              : <Award className="w-3.5 h-3.5 mr-1.5" />}
-            Sertifikat
-          </Button>
-          <div className="flex-1" />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => { onClose(); navigate(`/sales-order?id=${card.id}`); }}
-          >
-            <ExternalLink className="w-4 h-4 mr-1.5" />
-            Lihat SO
-          </Button>
-          <Button variant="outline" size="sm" onClick={onClose}>Tutup</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            {/* ── tabs ── */}
+            <Tabs defaultValue="info" className="flex flex-col flex-1 overflow-hidden">
+              <TabsList className="flex-shrink-0 w-full rounded-none border-b bg-transparent justify-start px-4 gap-1 h-10">
+                <TabsTrigger value="info" className="text-xs gap-1.5 data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none">
+                  <Info className="w-3.5 h-3.5" /> Info
+                </TabsTrigger>
+                <TabsTrigger value="alat" className="text-xs gap-1.5 data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none">
+                  <Wrench className="w-3.5 h-3.5" /> Alat ({instruments.length})
+                </TabsTrigger>
+                <TabsTrigger value="checklist" className="text-xs gap-1.5 data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none">
+                  <ClipboardList className="w-3.5 h-3.5" /> Checklist
+                </TabsTrigger>
+                <TabsTrigger value="komentar" className="text-xs gap-1.5 data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none">
+                  <MessageSquare className="w-3.5 h-3.5" /> Komentar ({comments.length})
+                </TabsTrigger>
+              </TabsList>
+
+              {/* ── INFO ── */}
+              <TabsContent value="info" className="flex-1 overflow-y-auto p-4 space-y-4 mt-0">
+                {/* Customer & PIC */}
+                <div className="rounded-lg border p-4 space-y-3">
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Customer</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <InfoRow label="Nama Customer" value={receipt?.customer?.name} />
+                    <InfoRow label="Kode" value={receipt?.customer?.code} />
+                    <InfoRow label="Alamat" value={receipt?.customer?.address} />
+                  </div>
+                </div>
+
+                {/* PIC & Lokasi */}
+                <div className="rounded-lg border p-4 space-y-3">
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">PIC & Lokasi</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-start gap-2">
+                      <User className="w-3.5 h-3.5 text-muted-foreground mt-0.5" />
+                      <InfoRow label="Nama PIC" value={receipt?.service_pic_name} />
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <Phone className="w-3.5 h-3.5 text-muted-foreground mt-0.5" />
+                      <InfoRow label="No. HP PIC" value={receipt?.service_pic_phone} />
+                    </div>
+                    <div className="col-span-2 flex items-start gap-2">
+                      <MapPin className="w-3.5 h-3.5 text-muted-foreground mt-0.5" />
+                      <InfoRow label="Lokasi Kalibrasi" value={receipt?.service_location} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tanggal & SPK */}
+                <div className="rounded-lg border p-4 space-y-3">
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Jadwal & SPK</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-start gap-2">
+                      <CalendarDays className="w-3.5 h-3.5 text-muted-foreground mt-0.5" />
+                      <InfoRow label="Tanggal Terima" value={fmtDate(receipt?.received_date ?? null)} />
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <CalendarDays className="w-3.5 h-3.5 text-muted-foreground mt-0.5" />
+                      <InfoRow label="Target Selesai" value={fmtDate(receipt?.target_completion_date ?? null)} />
+                    </div>
+                    <InfoRow label="Nomor SPK" value={receipt?.spk_number} />
+                    <InfoRow label="SPK Diterbitkan" value={fmtDate(receipt?.spk_issued_at ?? null)} />
+                    <InfoRow label="SPK Ditandatangani" value={fmtDate(receipt?.spk_signed_at ?? null)} />
+                  </div>
+                </div>
+
+                {/* Ringkasan Nilai */}
+                <div className="rounded-lg border p-4 space-y-2">
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Ringkasan</h3>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Jumlah Alat</span>
+                    <span className="font-semibold">{instruments.length} alat</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Total Nilai</span>
+                    <span className="font-semibold text-primary">{formatRupiah(totalValue)}</span>
+                  </div>
+                </div>
+
+                {/* Catatan */}
+                {receipt?.customer_request_notes && (
+                  <div className="rounded-lg border p-4 space-y-2">
+                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5" /> Catatan Customer
+                    </h3>
+                    <p className="text-sm text-muted-foreground">{receipt.customer_request_notes}</p>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* ── ALAT ── */}
+              <TabsContent value="alat" className="flex-1 overflow-y-auto mt-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50 border-b">
+                      <tr>
+                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground text-xs w-8">No.</th>
+                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground text-xs min-w-[140px]">Nama Alat</th>
+                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground text-xs">Merk/Model</th>
+                        <th className="px-3 py-2.5 text-left font-medium text-muted-foreground text-xs">No. Seri</th>
+                        <th className="px-3 py-2.5 text-right font-medium text-muted-foreground text-xs">Harga</th>
+                        <th className="px-3 py-2.5 text-center font-medium text-muted-foreground text-xs">Kelayakan</th>
+                        <th className="px-3 py-2.5 text-center font-medium text-muted-foreground text-xs">Kesimpulan</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {instruments.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="px-3 py-8 text-center text-sm text-muted-foreground">
+                            Belum ada data alat
+                          </td>
+                        </tr>
+                      ) : instruments.map((inst) => (
+                        <tr key={inst.id} className="hover:bg-muted/20">
+                          <td className="px-3 py-2.5 text-muted-foreground text-center text-xs">{inst.item_number}</td>
+                          <td className="px-3 py-2.5">
+                            <p className="font-medium">{inst.instrument_name}</p>
+                            {inst.measurement_range && (
+                              <p className="text-xs text-muted-foreground">{inst.measurement_range}</p>
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5 text-muted-foreground text-sm">{inst.brand_model ?? "-"}</td>
+                          <td className="px-3 py-2.5 text-muted-foreground text-sm font-mono text-xs">{inst.serial_number ?? "-"}</td>
+                          <td className="px-3 py-2.5 text-right text-sm">{formatRupiah(inst.unit_price)}</td>
+                          <td className="px-3 py-2.5 text-center">
+                            <FeasibilityBadge status={inst.feasibility_status} />
+                          </td>
+                          <td className="px-3 py-2.5 text-center">
+                            {inst.calibration_conclusion ? (
+                              <span className={cn(
+                                "text-xs px-2 py-0.5 rounded-full font-medium",
+                                inst.calibration_conclusion === "within_limits"
+                                  ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                                  : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                              )}>
+                                {inst.calibration_conclusion === "within_limits" ? "In Limit" : "Out of Limit"}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">-</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    {instruments.length > 0 && (
+                      <tfoot className="bg-muted/30 border-t">
+                        <tr>
+                          <td colSpan={4} className="px-3 py-2.5 text-xs font-semibold text-right">Total</td>
+                          <td className="px-3 py-2.5 text-right text-sm font-semibold">{formatRupiah(totalValue)}</td>
+                          <td colSpan={2} />
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </TabsContent>
+
+              {/* ── CHECKLIST ── */}
+              <TabsContent value="checklist" className="flex-1 overflow-y-auto p-4 space-y-4 mt-0">
+                {COLUMN_DEFS.filter((col) => col.id !== "selesai").map((col) => {
+                  const items = COLUMN_CHECKLISTS[col.id] ?? [];
+                  const doneCount = items.filter((item) => isChecked(item.key)).length;
+                  const allDone = items.length > 0 && doneCount === items.length;
+                  return (
+                    <div key={col.id} className="rounded-lg border overflow-hidden">
+                      <div className={cn("h-1", col.color)} />
+                      <div className="p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-sm font-semibold">{col.label}</h3>
+                          <span className={cn(
+                            "text-xs font-medium px-2 py-0.5 rounded-full",
+                            allDone
+                              ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                              : "bg-muted text-muted-foreground",
+                          )}>
+                            {doneCount}/{items.length}
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          {items.map((item) => {
+                            const checked = isChecked(item.key);
+                            const checkedAt = checkedBy(item.key);
+                            return (
+                              <button
+                                key={item.key}
+                                disabled={!canToggle || !receiptId}
+                                onClick={() => receiptId && onToggle(receiptId, item.key)}
+                                className={cn(
+                                  "flex items-start gap-2.5 w-full text-left rounded-lg p-2 transition-colors",
+                                  canToggle ? "hover:bg-muted/40 cursor-pointer" : "cursor-default",
+                                  checked && "bg-muted/30",
+                                )}
+                              >
+                                {checked
+                                  ? <CheckSquare className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+                                  : <Square className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+                                }
+                                <div className="flex-1 min-w-0">
+                                  <p className={cn("text-sm", checked && "line-through text-muted-foreground")}>
+                                    {item.label}
+                                  </p>
+                                  {checked && checkedAt && (
+                                    <p className="text-xs text-muted-foreground mt-0.5">✓ {checkedAt}</p>
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </TabsContent>
+
+              {/* ── KOMENTAR ── */}
+              <TabsContent value="komentar" className="flex-1 flex flex-col overflow-hidden mt-0">
+                {/* Comment list */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  {loadingComments ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : comments.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 gap-2 text-muted-foreground">
+                      <MessageSquare className="w-8 h-8 opacity-20" />
+                      <p className="text-sm">Belum ada komentar</p>
+                    </div>
+                  ) : (
+                    comments.map((c) => (
+                      <div key={c.id} className={cn(
+                        "flex gap-2.5",
+                        c.user_id === user?.id && "flex-row-reverse",
+                      )}>
+                        <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center flex-shrink-0 text-xs font-semibold text-muted-foreground">
+                          {(c.user_name ?? "?")[0].toUpperCase()}
+                        </div>
+                        <div className={cn(
+                          "max-w-[75%] rounded-2xl px-3 py-2 text-sm",
+                          c.user_id === user?.id
+                            ? "bg-primary text-primary-foreground rounded-tr-sm"
+                            : "bg-muted rounded-tl-sm",
+                        )}>
+                          {c.user_id !== user?.id && (
+                            <p className="text-xs font-semibold mb-0.5 opacity-70">{c.user_name ?? "Pengguna"}</p>
+                          )}
+                          <p className="whitespace-pre-wrap break-words">{c.message}</p>
+                          <p className={cn(
+                            "text-[10px] mt-1 opacity-60",
+                            c.user_id === user?.id ? "text-right" : "",
+                          )}>
+                            {fmtDateTime(c.created_at)}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  <div ref={commentEndRef} />
+                </div>
+
+                {/* Comment input */}
+                <div className="border-t p-3 flex gap-2 flex-shrink-0">
+                  <Textarea
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    placeholder="Tulis komentar..."
+                    className="min-h-[40px] max-h-[100px] resize-none text-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        sendComment();
+                      }
+                    }}
+                  />
+                  <Button
+                    size="icon"
+                    onClick={sendComment}
+                    disabled={!newComment.trim() || sending}
+                    className="flex-shrink-0 h-10 w-10"
+                  >
+                    {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  </Button>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
