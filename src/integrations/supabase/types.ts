@@ -2334,6 +2334,10 @@ export type Database = {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      guard_role_write: {
+        Args: { _allowed: Database["public"]["Enums"]["app_role"][] }
+        Returns: undefined
+      }
       has_any_role: {
         Args: {
           _roles: Database["public"]["Enums"]["app_role"][]
