@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { RefreshCw, Info, Package, Building2, Upload, Loader2, X, AlertTriangle } from "lucide-react";
+import { RefreshCw, Info, Package, Building2, Upload, Loader2, X, AlertTriangle, FlaskConical, CheckCircle2 } from "lucide-react";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +62,29 @@ interface StockOutItem {
   batches: BatchSelection[];
 }
 
+interface CalibrationSparePartPending {
+  id: string;
+  instrument_id: string;
+  product_id: string;
+  qty_used: number;
+  unit_price: number;
+  notes: string | null;
+  created_at: string;
+  product_name: string;
+  product_sku: string | null;
+  instrument_name: string;
+  receipt_number: string;
+  customer_name: string;
+}
+
+interface CalBatchSelection {
+  batch_id: string;
+  batch_no: string;
+  qty_available: number;
+  expired_date: string | null;
+  qty_out: number;
+}
+
 export default function StockOut() {
   const { language } = useLanguage();
   const navigate = useNavigate();
@@ -81,6 +104,14 @@ export default function StockOut() {
   const [deliveryNoteUrl, setDeliveryNoteUrl] = useState("");
   const [deliveryNoteFileName, setDeliveryNoteFileName] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+
+  // ── Kalibrasi tab state ──────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<"so" | "kalibrasi">("so");
+  const [calibrationParts, setCalibrationParts] = useState<CalibrationSparePartPending[]>([]);
+  const [loadingCalParts, setLoadingCalParts] = useState(false);
+  const [processingPartId, setProcessingPartId] = useState<string | null>(null);
+  const [calBatches, setCalBatches] = useState<CalBatchSelection[]>([]);
+  const [isIssuingCal, setIsIssuingCal] = useState(false);
 
   const fetchSalesOrders = useCallback(async () => {
     setLoadingSalesOrders(true);
@@ -189,6 +220,123 @@ export default function StockOut() {
   const generateStockOutNumber = async () => {
     const number = await generateUniqueStockOutNumber();
     setStockOutNumber(number);
+  };
+
+  // ── Kalibrasi helpers ────────────────────────────────────────────────────
+
+  const fetchCalibrationParts = useCallback(async () => {
+    setLoadingCalParts(true);
+    const { data, error } = await supabase
+      .from("calibration_spare_parts")
+      .select(`
+        id, instrument_id, product_id, qty_used, unit_price, notes, created_at,
+        product:products(name, sku),
+        instrument:calibration_instruments(
+          instrument_name,
+          receipt:calibration_receipts(receipt_number, customer:customers(name))
+        )
+      `)
+      .eq("stock_issued", false)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      toast.error("Gagal memuat permintaan spare part kalibrasi");
+      setLoadingCalParts(false);
+      return;
+    }
+
+    setCalibrationParts(
+      (data || []).map((row: Record<string, unknown>) => {
+        const product = row.product as { name?: string; sku?: string } | null;
+        const instrument = row.instrument as {
+          instrument_name?: string;
+          receipt?: { receipt_number?: string; customer?: { name?: string } } | null;
+        } | null;
+        return {
+          id: row.id as string,
+          instrument_id: row.instrument_id as string,
+          product_id: row.product_id as string,
+          qty_used: row.qty_used as number,
+          unit_price: row.unit_price as number,
+          notes: row.notes as string | null,
+          created_at: row.created_at as string,
+          product_name: product?.name ?? "-",
+          product_sku: product?.sku ?? null,
+          instrument_name: instrument?.instrument_name ?? "-",
+          receipt_number: instrument?.receipt?.receipt_number ?? "-",
+          customer_name: instrument?.receipt?.customer?.name ?? "-",
+        };
+      })
+    );
+    setLoadingCalParts(false);
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "kalibrasi") fetchCalibrationParts();
+  }, [activeTab, fetchCalibrationParts]);
+
+  const openProcessPart = async (part: CalibrationSparePartPending) => {
+    setProcessingPartId(part.id);
+    setCalBatches([]);
+    const { data: batches } = await supabase
+      .from("inventory_batches")
+      .select("id, batch_no, qty_on_hand, expired_date")
+      .eq("product_id", part.product_id)
+      .gt("qty_on_hand", 0)
+      .order("expired_date", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: true });
+
+    const batchList: CalBatchSelection[] = (batches || []).map((b) => ({
+      batch_id: b.id,
+      batch_no: b.batch_no,
+      qty_available: b.qty_on_hand,
+      expired_date: b.expired_date,
+      qty_out: 0,
+    }));
+
+    // auto-allocate FIFO
+    let remaining = part.qty_used;
+    const allocated = batchList.map((b) => {
+      if (remaining <= 0) return b;
+      const take = Math.min(remaining, b.qty_available);
+      remaining -= take;
+      return { ...b, qty_out: take };
+    });
+    setCalBatches(allocated);
+  };
+
+  const handleIssueCalibration = async (part: CalibrationSparePartPending) => {
+    const batchesWithQty = calBatches.filter((b) => b.qty_out > 0);
+    if (batchesWithQty.length === 0) {
+      toast.error("Pilih minimal satu batch dengan qty > 0");
+      return;
+    }
+    const totalOut = batchesWithQty.reduce((s, b) => s + b.qty_out, 0);
+    if (totalOut !== part.qty_used) {
+      toast.error(`Total qty batch (${totalOut}) harus sama dengan qty spare part (${part.qty_used})`);
+      return;
+    }
+
+    setIsIssuingCal(true);
+    const { data: result, error } = await supabase.rpc("calibration_spare_part_issue", {
+      p_spare_part_id: part.id,
+      p_batches: JSON.stringify(
+        batchesWithQty.map((b) => ({ batch_id: b.batch_id, qty_out: b.qty_out }))
+      ),
+      p_issued_by: (await supabase.auth.getUser()).data.user?.id ?? null,
+    });
+
+    setIsIssuingCal(false);
+
+    if (error || !(result as { success?: boolean })?.success) {
+      toast.error((result as { error?: string })?.error ?? error?.message ?? "Gagal memproses pengeluaran stok");
+      return;
+    }
+
+    toast.success(`Stok ${part.product_name} berhasil dikeluarkan (${totalOut} unit)`);
+    setProcessingPartId(null);
+    setCalBatches([]);
+    fetchCalibrationParts();
   };
 
   const handleBatchQtyChange = (itemIndex: number, batchIndex: number, value: number) => {
@@ -577,6 +725,184 @@ export default function StockOut() {
         </Button>
       </div>
 
+      {/* Tabs */}
+      <div className="flex border-b">
+        <button
+          onClick={() => setActiveTab("so")}
+          className={`px-5 py-2.5 text-sm font-medium flex items-center gap-2 border-b-2 -mb-px transition-colors ${
+            activeTab === "so"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <Package className="w-4 h-4" />
+          Stock Out SO
+        </button>
+        <button
+          onClick={() => setActiveTab("kalibrasi")}
+          className={`px-5 py-2.5 text-sm font-medium flex items-center gap-2 border-b-2 -mb-px transition-colors ${
+            activeTab === "kalibrasi"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <FlaskConical className="w-4 h-4" />
+          Kalibrasi
+          {calibrationParts.length > 0 && (
+            <span className="bg-destructive text-destructive-foreground text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+              {calibrationParts.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* ── KALIBRASI TAB ── */}
+      {activeTab === "kalibrasi" && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FlaskConical className="w-5 h-5 text-primary" />
+                <CardTitle className="text-base">Permintaan Spare Part Kalibrasi</CardTitle>
+              </div>
+              <Button variant="outline" size="sm" onClick={fetchCalibrationParts} disabled={loadingCalParts}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${loadingCalParts ? "animate-spin" : ""}`} />
+                Refresh
+              </Button>
+            </div>
+            <CardDescription>
+              Daftar spare part yang perlu dikeluarkan dari stok. Proses setiap item untuk mengurangi stok gudang.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loadingCalParts ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : calibrationParts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-2 text-muted-foreground">
+                <CheckCircle2 className="w-10 h-10 text-green-500" />
+                <p className="font-medium">Semua spare part sudah diproses</p>
+                <p className="text-sm">Tidak ada permintaan pengeluaran stok kalibrasi yang tertunda</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {calibrationParts.map((part) => (
+                  <div
+                    key={part.id}
+                    className="rounded-lg border p-4 space-y-3"
+                  >
+                    {/* Part info */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+                            {part.receipt_number}
+                          </span>
+                          <span className="text-xs text-muted-foreground">{part.customer_name}</span>
+                        </div>
+                        <p className="font-medium">
+                          {part.product_name}
+                          {part.product_sku && (
+                            <span className="ml-2 text-xs font-mono text-muted-foreground">{part.product_sku}</span>
+                          )}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Alat: {part.instrument_name} · Qty: <strong>{part.qty_used}</strong>
+                          {part.notes && ` · ${part.notes}`}
+                        </p>
+                      </div>
+                      {processingPartId !== part.id && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-shrink-0"
+                          onClick={() => openProcessPart(part)}
+                        >
+                          Proses
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Batch selection form */}
+                    {processingPartId === part.id && (
+                      <div className="rounded-md bg-muted/30 border p-3 space-y-3">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                          Pilih Batch (FIFO — sudah dialokasikan otomatis)
+                        </p>
+                        {calBatches.length === 0 ? (
+                          <p className="text-sm text-destructive flex items-center gap-1.5">
+                            <AlertTriangle className="w-4 h-4" /> Stok habis — tidak ada batch tersedia
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            {calBatches.map((batch, idx) => (
+                              <div key={batch.batch_id} className="flex items-center gap-3 text-sm">
+                                <span className="font-mono w-28 text-muted-foreground">{batch.batch_no}</span>
+                                <Badge
+                                  variant={
+                                    batch.expired_date && new Date(batch.expired_date) < new Date()
+                                      ? "cancelled"
+                                      : "secondary"
+                                  }
+                                >
+                                  Exp: {formatDate(batch.expired_date)}
+                                </Badge>
+                                <span className="text-muted-foreground text-xs">Avail: {batch.qty_available}</span>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  max={batch.qty_available}
+                                  className="w-20 h-8"
+                                  value={batch.qty_out}
+                                  onChange={(e) => {
+                                    const val = Math.min(parseInt(e.target.value) || 0, batch.qty_available);
+                                    setCalBatches((prev) =>
+                                      prev.map((b, i) => (i === idx ? { ...b, qty_out: val } : b))
+                                    );
+                                  }}
+                                />
+                              </div>
+                            ))}
+                            <p className="text-xs text-muted-foreground">
+                              Total dialokasikan:{" "}
+                              <strong className={calBatches.reduce((s, b) => s + b.qty_out, 0) === part.qty_used ? "text-green-600" : "text-destructive"}>
+                                {calBatches.reduce((s, b) => s + b.qty_out, 0)}
+                              </strong>{" "}
+                              / {part.qty_used}
+                            </p>
+                          </div>
+                        )}
+                        <div className="flex gap-2 justify-end">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => { setProcessingPartId(null); setCalBatches([]); }}
+                          >
+                            Batal
+                          </Button>
+                          <Button
+                            size="sm"
+                            disabled={isIssuingCal || calBatches.length === 0}
+                            onClick={() => handleIssueCalibration(part)}
+                          >
+                            {isIssuingCal && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+                            Konfirmasi Keluar Stok
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── STOCK OUT SO TAB ── */}
+      {activeTab === "so" && (<>
+
       {/* Step 1: Select Sales Order */}
       <Card className="border-info/30 bg-info/5">
         <CardHeader className="pb-3">
@@ -800,8 +1126,8 @@ export default function StockOut() {
 
       {/* Actions */}
       <div className="flex justify-end gap-4">
-        <Button 
-          variant="outline" 
+        <Button
+          variant="outline"
           onClick={() => {
             setSelectedSalesOrderId("");
             setSelectedSalesOrder(null);
@@ -822,6 +1148,8 @@ export default function StockOut() {
           </Button>
         )}
       </div>
+
+      </>)}
     </div>
   );
 }

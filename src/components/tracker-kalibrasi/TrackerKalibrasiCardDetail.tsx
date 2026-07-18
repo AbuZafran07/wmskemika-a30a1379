@@ -60,13 +60,18 @@ interface InstrumentDetail {
 
 interface SparePart {
   id: string;
-  calibration_instrument_id: string;
-  part_name: string;
-  part_number: string | null;
-  quantity: number;
+  instrument_id: string;
+  product_id: string;
+  qty_used: number;
   unit_price: number;
-  replaced_at: string | null;
+  notes: string | null;
+  stock_issued: boolean;
+  stock_issued_at: string | null;
+  created_at: string;
+  // joined
   instrument_name?: string;
+  product_name?: string;
+  product_sku?: string | null;
 }
 
 interface KomComment {
@@ -161,7 +166,8 @@ export default function TrackerKalibrasiCardDetail({
 
   // spare parts add form
   const [addingPart, setAddingPart] = useState(false);
-  const [newPart, setNewPart] = useState({ instrument_id: "", product_id: "", part_name: "", part_number: "", quantity: "1", unit_price: "0" });
+  const [newPart, setNewPart] = useState({ instrument_id: "", product_id: "", qty_used: "1", unit_price: "0", notes: "" });
+  const [selectedProductStock, setSelectedProductStock] = useState<number | null>(null);
 
   const commentEndRef = useRef<HTMLDivElement>(null);
 
@@ -204,19 +210,21 @@ export default function TrackerKalibrasiCardDetail({
         setNewPart(p => ({ ...p, instrument_id: instList[0].id }));
       }
 
-      // fetch spare parts
+      // fetch spare parts (join product name + sku)
       if (instList.length > 0) {
         const ids = instList.map(i => i.id);
         const { data: spData } = await supabase
           .from("calibration_spare_parts")
-          .select("*")
-          .in("calibration_instrument_id", ids)
-          .order("replaced_at", { ascending: false });
+          .select("*, product:products(name, sku)")
+          .in("instrument_id", ids)
+          .order("created_at", { ascending: false });
 
         setSpareParts(
-          (spData || []).map(p => ({
+          (spData || []).map((p: Record<string, unknown>) => ({
             ...p,
-            instrument_name: instList.find(i => i.id === p.calibration_instrument_id)?.instrument_name ?? "-",
+            instrument_name: instList.find(i => i.id === p.instrument_id)?.instrument_name ?? "-",
+            product_name: (p.product as { name?: string } | null)?.name ?? "-",
+            product_sku: (p.product as { sku?: string } | null)?.sku ?? null,
           })) as SparePart[]
         );
       }
@@ -291,30 +299,55 @@ export default function TrackerKalibrasiCardDetail({
       toast.error("Pilih produk dan pilih alat");
       return;
     }
+
+    const qty = parseInt(newPart.qty_used) || 1;
+    const product = products.find(p => p.id === newPart.product_id);
+
+    // 1. Cek stok tersedia
+    const { data: batches, error: batchErr } = await supabase
+      .from("inventory_batches")
+      .select("qty_on_hand")
+      .eq("product_id", newPart.product_id)
+      .gt("qty_on_hand", 0);
+
+    if (batchErr) { toast.error("Gagal cek stok"); return; }
+
+    const totalStock = (batches || []).reduce((s, b) => s + b.qty_on_hand, 0);
+    if (totalStock < qty) {
+      toast.error(`Stok tidak cukup. Tersedia: ${totalStock} unit`);
+      return;
+    }
+
+    // 2. Simpan spare part — warehouse proses pengeluaran dari menu Stock Out
     const { data, error } = await supabase
       .from("calibration_spare_parts")
       .insert({
-        calibration_instrument_id: newPart.instrument_id,
-        part_name: newPart.part_name.trim(),
-        part_number: newPart.part_number.trim() || null,
-        quantity: parseInt(newPart.quantity) || 1,
+        instrument_id: newPart.instrument_id,
+        product_id: newPart.product_id,
+        qty_used: qty,
         unit_price: parseFloat(newPart.unit_price) || 0,
-        replaced_at: new Date().toISOString(),
+        notes: newPart.notes.trim() || null,
+        created_by: user?.id ?? null,
       })
-      .select()
+      .select("*, product:products(name, sku)")
       .single();
 
     if (error) { toast.error("Gagal tambah spare part"); return; }
 
+    const raw = data as Record<string, unknown>;
     setSpareParts(prev => [
-      ...prev,
       {
-        ...(data as SparePart),
+        ...raw,
         instrument_name: instruments.find(i => i.id === newPart.instrument_id)?.instrument_name ?? "-",
-      },
+        product_name: (raw.product as { name?: string } | null)?.name ?? product?.name ?? "-",
+        product_sku: (raw.product as { sku?: string } | null)?.sku ?? null,
+      } as SparePart,
+      ...prev,
     ]);
-    setNewPart(p => ({ ...p, product_id: "", part_name: "", part_number: "", quantity: "1", unit_price: "0" }));
+    setNewPart({ instrument_id: newPart.instrument_id, product_id: "", qty_used: "1", unit_price: "0", notes: "" });
+    setSelectedProductStock(null);
     setAddingPart(false);
+    toast.success("Spare part dicatat. Warehouse dapat memproses pengeluaran stok di menu Stock Out → Kalibrasi.");
   };
 
   const deleteSparePart = async (id: string) => {
@@ -513,39 +546,46 @@ export default function TrackerKalibrasiCardDetail({
                                 description: p.sku ?? undefined,
                               }))}
                             value={newPart.product_id}
-                            onValueChange={(id) => {
+                            onValueChange={async (id) => {
                               const product = products.find(p => p.id === id);
-                              if (product) {
-                                setNewPart(prev => ({
-                                  ...prev,
-                                  product_id: id,
-                                  part_name: product.name,
-                                  part_number: product.sku ?? "",
-                                  unit_price: String(product.purchase_price ?? 0),
-                                }));
-                              }
+                              if (!product) return;
+                              setNewPart(prev => ({
+                                ...prev,
+                                product_id: id,
+                                unit_price: String(product.purchase_price ?? 0),
+                              }));
+                              setSelectedProductStock(null);
+                              const { data } = await supabase
+                                .from("inventory_batches")
+                                .select("qty_on_hand")
+                                .eq("product_id", id)
+                                .gt("qty_on_hand", 0);
+                              setSelectedProductStock(
+                                (data || []).reduce((s, b) => s + b.qty_on_hand, 0)
+                              );
                             }}
                             placeholder="Cari produk dari stok..."
                           />
+                          {selectedProductStock !== null && (
+                            <p className={cn(
+                              "text-xs font-medium mt-1",
+                              selectedProductStock > 0 ? "text-green-600 dark:text-green-400" : "text-destructive",
+                            )}>
+                              {selectedProductStock > 0
+                                ? `Stok tersedia: ${selectedProductStock} unit`
+                                : "⚠ Stok habis — tidak bisa disimpan"}
+                            </p>
+                          )}
                         </div>
-                        {/* Detail — auto-terisi, bisa diedit */}
-                        <div className="grid grid-cols-4 gap-2">
-                          <div className="col-span-2 space-y-1">
-                            <span className="text-xs text-muted-foreground">SKU / No. Part</span>
-                            <Input
-                              className="h-8 text-sm"
-                              placeholder="SKU produk"
-                              value={newPart.part_number}
-                              onChange={e => setNewPart(p => ({ ...p, part_number: e.target.value }))}
-                            />
-                          </div>
+                        {/* Qty, harga, catatan */}
+                        <div className="grid grid-cols-3 gap-2">
                           <div className="space-y-1">
                             <span className="text-xs text-muted-foreground">Qty</span>
                             <Input
                               className="h-8 text-sm"
                               type="number" min="1"
-                              value={newPart.quantity}
-                              onChange={e => setNewPart(p => ({ ...p, quantity: e.target.value }))}
+                              value={newPart.qty_used}
+                              onChange={e => setNewPart(p => ({ ...p, qty_used: e.target.value }))}
                             />
                           </div>
                           <div className="space-y-1">
@@ -555,6 +595,15 @@ export default function TrackerKalibrasiCardDetail({
                               type="number" min="0"
                               value={newPart.unit_price}
                               onChange={e => setNewPart(p => ({ ...p, unit_price: e.target.value }))}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <span className="text-xs text-muted-foreground">Catatan</span>
+                            <Input
+                              className="h-8 text-sm"
+                              placeholder="opsional"
+                              value={newPart.notes}
+                              onChange={e => setNewPart(p => ({ ...p, notes: e.target.value }))}
                             />
                           </div>
                         </div>
@@ -576,7 +625,7 @@ export default function TrackerKalibrasiCardDetail({
                       )}
                       <div className="flex gap-2 justify-end">
                         <Button variant="ghost" size="sm" className="h-7 text-xs"
-                          onClick={() => { setAddingPart(false); }}>Batal</Button>
+                          onClick={() => { setAddingPart(false); setSelectedProductStock(null); }}>Batal</Button>
                         <Button size="sm" className="h-7 text-xs" onClick={addSparePart}>Simpan</Button>
                       </div>
                     </div>
@@ -589,32 +638,45 @@ export default function TrackerKalibrasiCardDetail({
                       <table className="w-full text-sm">
                         <thead className="bg-muted/50">
                           <tr>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Nama Part</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">No. Part</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Produk</th>
                             <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Alat</th>
                             <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">Qty</th>
                             <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Harga</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Tanggal</th>
+                            <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">Stok Keluar</th>
                             {canToggle && <th className="px-3 py-2 w-8" />}
                           </tr>
                         </thead>
                         <tbody className="divide-y">
                           {spareParts.map(p => (
                             <tr key={p.id} className="hover:bg-muted/20">
-                              <td className="px-3 py-2 font-medium">{p.part_name}</td>
-                              <td className="px-3 py-2 text-muted-foreground font-mono text-xs">{p.part_number ?? "-"}</td>
+                              <td className="px-3 py-2">
+                                <p className="font-medium text-sm">{p.product_name}</p>
+                                {p.product_sku && <p className="text-xs text-muted-foreground font-mono">{p.product_sku}</p>}
+                              </td>
                               <td className="px-3 py-2 text-muted-foreground text-xs">{p.instrument_name}</td>
-                              <td className="px-3 py-2 text-center">{p.quantity}</td>
+                              <td className="px-3 py-2 text-center">{p.qty_used}</td>
                               <td className="px-3 py-2 text-right">{formatRupiah(p.unit_price)}</td>
-                              <td className="px-3 py-2 text-muted-foreground text-xs">{fmtDate(p.replaced_at)}</td>
+                              <td className="px-3 py-2 text-center">
+                                {p.stock_issued ? (
+                                  <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                                    Dikeluarkan
+                                  </span>
+                                ) : (
+                                  <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300">
+                                    Menunggu
+                                  </span>
+                                )}
+                              </td>
                               {canToggle && (
                                 <td className="px-3 py-2">
-                                  <button
-                                    className="text-muted-foreground hover:text-destructive transition-colors"
-                                    onClick={() => deleteSparePart(p.id)}
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
+                                  {!p.stock_issued && (
+                                    <button
+                                      className="text-muted-foreground hover:text-destructive transition-colors"
+                                      onClick={() => deleteSparePart(p.id)}
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
                                 </td>
                               )}
                             </tr>
