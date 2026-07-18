@@ -70,6 +70,14 @@ export function useCalibrationReceipts() {
   return { receipts, loading, refetch: fetchReceipts };
 }
 
+export async function updateReceiptStatus(id: string, status: string) {
+  const { error } = await supabase
+    .from('calibration_receipts')
+    .update({ status })
+    .eq('id', id);
+  if (error) throw error;
+}
+
 export async function createCalibrationReceipt(
   header: {
     customer_id: string;

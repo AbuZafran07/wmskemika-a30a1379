@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from "react";
 import {
-  ClipboardList, Plus, Trash2, ChevronRight, Check, Loader2, Search,
+  ClipboardList, Plus, Trash2, ChevronRight, Check, Loader2, Search, ChevronDown,
 } from "lucide-react";
 import { format } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
@@ -9,6 +9,7 @@ import { useCustomers } from "@/hooks/useMasterData";
 import {
   useCalibrationReceipts,
   createCalibrationReceipt,
+  updateReceiptStatus,
   CalibrationInstrumentInput,
   CalibrationReceiptRow,
 } from "@/hooks/usePenerimaanKalibrasi";
@@ -52,6 +53,79 @@ function StatusBadge({ status }: { status: string }) {
     <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium", cfg.className)}>
       {cfg.label}
     </span>
+  );
+}
+
+const EDITABLE_STATUSES = Object.entries(STATUS_CONFIG).filter(
+  ([key]) => key !== "converted_to_so",
+);
+
+function StatusEditCell({
+  receiptId,
+  status,
+  onUpdated,
+}: {
+  receiptId: string;
+  status: string;
+  onUpdated: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const handleSelect = async (newStatus: string) => {
+    if (newStatus === status) { setOpen(false); return; }
+    setSaving(true);
+    try {
+      await updateReceiptStatus(receiptId, newStatus);
+      onUpdated();
+      toast.success("Status diperbarui");
+    } catch {
+      toast.error("Gagal update status");
+    }
+    setSaving(false);
+    setOpen(false);
+  };
+
+  if (status === "converted_to_so" || status === "cancelled") {
+    return <StatusBadge status={status} />;
+  }
+
+  return (
+    <div className="relative inline-block">
+      <button
+        disabled={saving}
+        onClick={() => setOpen(!open)}
+        className={cn(
+          "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-opacity",
+          STATUS_CONFIG[status]?.className ?? "",
+          "hover:opacity-80 cursor-pointer",
+        )}
+      >
+        {saving ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : STATUS_CONFIG[status]?.label ?? status}
+        {!saving && <ChevronDown className="w-2.5 h-2.5 opacity-60" />}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full mt-1 z-20 bg-background border rounded-lg shadow-lg py-1 min-w-[160px]">
+            {EDITABLE_STATUSES.map(([key, cfg]) => (
+              <button
+                key={key}
+                onClick={() => handleSelect(key)}
+                className={cn(
+                  "w-full text-left px-3 py-1.5 text-xs hover:bg-muted/50 flex items-center gap-2",
+                  key === status && "font-semibold",
+                )}
+              >
+                <span className={cn("w-2 h-2 rounded-full flex-shrink-0", cfg.className.split(" ")[0])} />
+                {cfg.label}
+                {key === status && <Check className="w-3 h-3 ml-auto" />}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -625,7 +699,11 @@ export default function PenerimaanKalibrasi() {
                         : "-"}
                     </td>
                     <td className="px-4 py-3">
-                      <StatusBadge status={r.status} />
+                      <StatusEditCell
+                        receiptId={r.id}
+                        status={r.status}
+                        onUpdated={refetch}
+                      />
                     </td>
                   </tr>
                 ))
