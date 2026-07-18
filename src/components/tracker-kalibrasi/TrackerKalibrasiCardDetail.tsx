@@ -13,11 +13,13 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   COLUMN_DEFS,
   COLUMN_CHECKLISTS,
   KalibrasiV2Checklist,
 } from "@/hooks/useTrackerKalibrasi";
+import { useProducts } from "@/hooks/useMasterData";
 import { generateSPKPdf, generateCertificatePdf } from "@/lib/calibrationPdf";
 
 // ─── types ────────────────────────────────────────────────────────────────────
@@ -145,6 +147,7 @@ export default function TrackerKalibrasiCardDetail({
   onClose,
 }: Props) {
   const { user } = useAuth();
+  const { products } = useProducts();
 
   const [receipt, setReceipt] = useState<ReceiptDetail | null>(null);
   const [instruments, setInstruments] = useState<InstrumentDetail[]>([]);
@@ -158,7 +161,7 @@ export default function TrackerKalibrasiCardDetail({
 
   // spare parts add form
   const [addingPart, setAddingPart] = useState(false);
-  const [newPart, setNewPart] = useState({ instrument_id: "", part_name: "", part_number: "", quantity: "1", unit_price: "0" });
+  const [newPart, setNewPart] = useState({ instrument_id: "", product_id: "", part_name: "", part_number: "", quantity: "1", unit_price: "0" });
 
   const commentEndRef = useRef<HTMLDivElement>(null);
 
@@ -284,8 +287,8 @@ export default function TrackerKalibrasiCardDetail({
   // ── spare parts CRUD ────────────────────────────────────────────────────
 
   const addSparePart = async () => {
-    if (!newPart.part_name.trim() || !newPart.instrument_id) {
-      toast.error("Pilih alat dan isi nama spare part");
+    if (!newPart.product_id || !newPart.instrument_id) {
+      toast.error("Pilih produk dan pilih alat");
       return;
     }
     const { data, error } = await supabase
@@ -310,7 +313,7 @@ export default function TrackerKalibrasiCardDetail({
         instrument_name: instruments.find(i => i.id === newPart.instrument_id)?.instrument_name ?? "-",
       },
     ]);
-    setNewPart(p => ({ ...p, part_name: "", part_number: "", quantity: "1", unit_price: "0" }));
+    setNewPart(p => ({ ...p, product_id: "", part_name: "", part_number: "", quantity: "1", unit_price: "0" }));
     setAddingPart(false);
   };
 
@@ -497,42 +500,63 @@ export default function TrackerKalibrasiCardDetail({
 
                   {addingPart && (
                     <div className="rounded-lg border p-3 mb-2 bg-muted/20 space-y-2">
-                      <div className="grid grid-cols-5 gap-2">
-                        <div className="col-span-2 space-y-1">
-                          <span className="text-xs text-muted-foreground">Nama Part *</span>
-                          <Input
-                            className="h-8 text-sm"
-                            placeholder="Nama spare part"
-                            value={newPart.part_name}
-                            onChange={e => setNewPart(p => ({ ...p, part_name: e.target.value }))}
+                      <div className="space-y-2">
+                        {/* Pilih produk dari stok */}
+                        <div className="space-y-1">
+                          <span className="text-xs text-muted-foreground">Produk / Spare Part *</span>
+                          <SearchableSelect
+                            options={products
+                              .filter(p => p.is_active)
+                              .map(p => ({
+                                value: p.id,
+                                label: p.name,
+                                description: p.sku ?? undefined,
+                              }))}
+                            value={newPart.product_id}
+                            onValueChange={(id) => {
+                              const product = products.find(p => p.id === id);
+                              if (product) {
+                                setNewPart(prev => ({
+                                  ...prev,
+                                  product_id: id,
+                                  part_name: product.name,
+                                  part_number: product.sku ?? "",
+                                  unit_price: String(product.purchase_price ?? 0),
+                                }));
+                              }
+                            }}
+                            placeholder="Cari produk dari stok..."
                           />
                         </div>
-                        <div className="space-y-1">
-                          <span className="text-xs text-muted-foreground">No. Part</span>
-                          <Input
-                            className="h-8 text-sm"
-                            placeholder="Opsional"
-                            value={newPart.part_number}
-                            onChange={e => setNewPart(p => ({ ...p, part_number: e.target.value }))}
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <span className="text-xs text-muted-foreground">Qty</span>
-                          <Input
-                            className="h-8 text-sm"
-                            type="number" min="1"
-                            value={newPart.quantity}
-                            onChange={e => setNewPart(p => ({ ...p, quantity: e.target.value }))}
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <span className="text-xs text-muted-foreground">Harga (Rp)</span>
-                          <Input
-                            className="h-8 text-sm"
-                            type="number" min="0"
-                            value={newPart.unit_price}
-                            onChange={e => setNewPart(p => ({ ...p, unit_price: e.target.value }))}
-                          />
+                        {/* Detail — auto-terisi, bisa diedit */}
+                        <div className="grid grid-cols-4 gap-2">
+                          <div className="col-span-2 space-y-1">
+                            <span className="text-xs text-muted-foreground">SKU / No. Part</span>
+                            <Input
+                              className="h-8 text-sm"
+                              placeholder="SKU produk"
+                              value={newPart.part_number}
+                              onChange={e => setNewPart(p => ({ ...p, part_number: e.target.value }))}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <span className="text-xs text-muted-foreground">Qty</span>
+                            <Input
+                              className="h-8 text-sm"
+                              type="number" min="1"
+                              value={newPart.quantity}
+                              onChange={e => setNewPart(p => ({ ...p, quantity: e.target.value }))}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <span className="text-xs text-muted-foreground">Harga (Rp)</span>
+                            <Input
+                              className="h-8 text-sm"
+                              type="number" min="0"
+                              value={newPart.unit_price}
+                              onChange={e => setNewPart(p => ({ ...p, unit_price: e.target.value }))}
+                            />
+                          </div>
                         </div>
                       </div>
                       {instruments.length > 1 && (
